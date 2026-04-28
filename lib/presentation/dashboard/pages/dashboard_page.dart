@@ -9,11 +9,9 @@ import '../../../core/providers/auth_providers.dart';
 import '../../../core/providers/customer_providers.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/connectivity_service.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../common/widgets/common_widgets.dart';
-import '../../customers/providers/customer_list_provider.dart';
 import '../../customers/widgets/customer_card.dart';
 import '../../reports/pages/reports_page.dart';
 import '../widgets/profile_tab.dart';
@@ -78,13 +76,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           : Text(titles[_navIndex],
               style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700)),
       actions: [
-        Consumer(builder: (ctx, ref, _) {
-          final isDark = ref.watch(themeModeProvider.notifier).isDark;
-          return IconButton(
-            icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
-            onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
-          );
-        }),
         if (_navIndex == 0)
           IconButton(
             icon: const Icon(Icons.search_rounded),
@@ -121,12 +112,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 
   Widget _buildFab(BuildContext context) {
-    return FloatingActionButton.extended(
+    return FloatingActionButton(
       heroTag:  'dashboard_fab',
       onPressed: () => context.push(AppRoutes.addCustomer),
-      icon:  const Icon(Icons.person_add_alt_1_rounded),
-      label: Text('Add Customer',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+      child: const Icon(Icons.person_add_alt_1_rounded),
     );
   }
 }
@@ -267,7 +256,6 @@ class _HomeTab extends ConsumerWidget {
                     animationIndex: i,
                     onTap:   () => context.push(AppRoutes.customerDetail(c.id), extra: c),
                     onEdit:  () => context.push(AppRoutes.editCustomer, extra: c),
-                    onDelete: () => _confirmDelete(ctx, ref, c),
                   );
                 }, childCount: preview.length + (customers.length > 6 ? 1 : 0)),
               );
@@ -278,33 +266,6 @@ class _HomeTab extends ConsumerWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _confirmDelete(
-    BuildContext context, WidgetRef ref, CustomerEntity c) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Delete ${c.name}?',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
-        content: Text('This will permanently delete this customer and all their entries.',
-            style: GoogleFonts.poppins(fontSize: 14)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: GoogleFonts.poppins(color: Colors.grey))),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.danger, minimumSize: const Size(90, 40)),
-            child: Text('Delete', style: GoogleFonts.poppins(color: Colors.white))),
-        ],
-      ),
-    );
-    if (ok == true && context.mounted) {
-      await ref.read(customerListProvider.notifier).deleteCustomer(c.id);
-    }
   }
 
   Widget _buildShimmer() {
@@ -329,19 +290,23 @@ class _NetBalanceHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isPositive = net >= 0;
+    final start = isPositive ? cs.primary : AppColors.danger;
+    final end = isPositive
+        ? cs.primary.withOpacity(0.72)
+        : AppColors.danger.withOpacity(0.72);
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [cs.primary, cs.primary.withOpacity(0.72)],
+          colors: [start, end],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [BoxShadow(
-          color: cs.primary.withOpacity(0.28),
+          color: start.withOpacity(0.28),
           blurRadius: 20, offset: const Offset(0, 8),
         )],
       ),

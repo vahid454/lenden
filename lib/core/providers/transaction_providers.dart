@@ -53,9 +53,12 @@ final getTransactionsByDateRangeUseCaseProvider =
 
 final transactionsStreamProvider = StreamProvider.autoDispose
     .family<List<TransactionEntity>, String>((ref, customerId) async* {
+  // Emit a quick initial value so UI does not stay on shimmer
+  // while Firestore establishes the first snapshot.
+  yield const <TransactionEntity>[];
+
   // Guard: don't subscribe with empty id
   if (customerId.isEmpty) {
-    yield [];
     return;
   }
   final useCase = ref.watch(watchTransactionsUseCaseProvider);

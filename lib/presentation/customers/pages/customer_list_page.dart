@@ -153,90 +153,9 @@ class CustomerListPage extends ConsumerWidget {
             AppRoutes.editCustomer,
             extra: customer,
           ),
-          onDelete: () => _confirmDelete(context, ref, customer),
         );
       },
     );
-  }
-
-  // ── Delete Confirmation ────────────────────────────────────────────────────
-
-  Future<void> _confirmDelete(
-    BuildContext context,
-    WidgetRef ref,
-    CustomerEntity customer,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          'Delete Customer?',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-        ),
-        content: RichText(
-          text: TextSpan(
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-            children: [
-              const TextSpan(text: 'This will permanently delete '),
-              TextSpan(
-                text: customer.name,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              const TextSpan(
-                text: ' and all their transaction history.\n\n'
-                    'This action cannot be undone.',
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.poppins(color: Colors.grey),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.danger,
-              minimumSize: const Size(90, 40),
-            ),
-            child: Text(
-              'Delete',
-              style: GoogleFonts.poppins(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && context.mounted) {
-      final success = await ref
-          .read(customerListProvider.notifier)
-          .deleteCustomer(customer.id);
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              success
-                  ? '${customer.name} deleted.'
-                  : 'Failed to delete. Please try again.',
-            ),
-            backgroundColor: success ? AppColors.success : AppColors.danger,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      }
-    }
   }
 
   // ── FAB ────────────────────────────────────────────────────────────────────
@@ -247,7 +166,7 @@ class CustomerListPage extends ConsumerWidget {
       onPressed: () => context.push(AppRoutes.addCustomer),
       icon: const Icon(Icons.person_add_alt_1_rounded),
       label: Text(
-        'Add Customer',
+        'Add',
         style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
       ),
     );

@@ -50,6 +50,7 @@ dependencies:
   connectivity_plus: ^6.0.5       # Phase 4: network state
   local_auth: ^2.3.0              # Phase 4: biometric/PIN lock
   package_info_plus: ^8.0.2       # Phase 4: app version info
+  flutter_launcher_icons: ^0.13.1
 
 dev_dependencies:
   flutter_test:
@@ -57,10 +58,17 @@ dev_dependencies:
   flutter_lints: ^4.0.0
   hive_generator: ^2.0.1
   build_runner: ^2.4.12
-
+  flutter_launcher_icons: ^0.13.1
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
     - assets/animations/
     - assets/icons/
+
+flutter_icons:
+  android: true
+  ios: false
+  image_path: "assets/icons/app_icon.png"
+  adaptive_icon_background: "#2D7DFF"
+  adaptive_icon_foreground: "assets/icons/foreground.png"

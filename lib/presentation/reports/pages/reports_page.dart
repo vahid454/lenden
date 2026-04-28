@@ -22,6 +22,10 @@ class ReportsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(reportsProvider);
     final cs    = Theme.of(context).colorScheme;
+    final customers = ref.watch(customersStreamProvider).valueOrNull ?? const [];
+    final customerNameById = {
+      for (final c in customers) c.id: c.name,
+    };
 
     return Scaffold(
       appBar: AppBar(
@@ -90,6 +94,11 @@ class ReportsPage extends ConsumerWidget {
 
                           // ── Recent transactions list ──────────────────────
                           _SectionLabel(label: 'Transactions (${state.txCount})'),
+                          const SizedBox(height: 4),
+                          _LegendNote(
+                            text:
+                                'Each entry shows customer, note, and whether you gave/got money.',
+                          ),
                           const SizedBox(height: 10),
                         ],
                       ),
@@ -105,7 +114,12 @@ class ReportsPage extends ConsumerWidget {
                       delegate: SliverChildBuilderDelegate(
                         (ctx, i) {
                           final tx = state.transactions[i];
-                          return _ReportTxTile(tx: tx, index: i);
+                          return _ReportTxTile(
+                            tx: tx,
+                            index: i,
+                            customerName:
+                                customerNameById[tx.customerId] ?? 'Unknown customer',
+                          );
                         },
                         childCount: state.transactions.length,
                       ),
@@ -231,9 +245,13 @@ class _SummaryCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final cs     = Theme.of(context).colorScheme;
     final net    = state.netBalance;
+    final isPositive = net >= 0;
+    final start = isPositive ? cs.primary : AppColors.danger;
+    final end = isPositive
+        ? cs.primary.withOpacity(0.7)
+        : AppColors.danger.withOpacity(0.7);
 
     return Column(
       children: [
@@ -243,7 +261,7 @@ class _SummaryCards extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [cs.primary, cs.primary.withOpacity(0.7)],
+              colors: [start, end],
               begin:  Alignment.topLeft,
               end:    Alignment.bottomRight,
             ),
@@ -564,7 +582,12 @@ class _LineChart extends StatelessWidget {
 class _ReportTxTile extends StatelessWidget {
   final TransactionEntity tx;
   final int               index;
-  const _ReportTxTile({required this.tx, required this.index});
+  final String customerName;
+  const _ReportTxTile({
+    required this.tx,
+    required this.index,
+    required this.customerName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -599,7 +622,8 @@ class _ReportTxTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(tx.note?.isNotEmpty == true ? tx.note! : isGave ? 'You gave money' : 'You got money',
+                Text(
+                    '$customerName • ${tx.note?.isNotEmpty == true ? tx.note! : (isGave ? 'You gave money' : 'You got money')}',
                     style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500),
                     maxLines: 1, overflow: TextOverflow.ellipsis),
                 Text(AppFormatters.relativeDate(tx.date),
@@ -634,6 +658,26 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         label,
         style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _LegendNote extends StatelessWidget {
+  final String text;
+  const _LegendNote({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: GoogleFonts.poppins(
+          fontSize: 11,
+          color: cs.onSurface.withOpacity(0.45),
+        ),
       ),
     );
   }

@@ -109,6 +109,16 @@ class ProfileTab extends ConsumerWidget {
 
           const SizedBox(height: 8),
 
+          _SettingsTile(
+            icon:    Icons.support_agent_rounded,
+            iconBg:  const Color(0xFF7C3AED),
+            label:   'Help & Support',
+            subtitle: 'Request admin actions (including customer deletion)',
+            onTap:   () => _openHelpSupport(context),
+          ).animate().fadeIn(delay: 150.ms),
+
+          const SizedBox(height: 8),
+
           // ── About Section ───────────────────────────────────────────────
           _SectionHeader(label: 'About'),
           const SizedBox(height: 8),
@@ -279,6 +289,64 @@ class ProfileTab extends ConsumerWidget {
       await signOut();
       if (context.mounted) context.go(AppRoutes.phoneInput);
     }
+  }
+
+  Future<void> _openHelpSupport(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Need Help?',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'For customer deletion and account-level actions, please contact the admin team from Help & Support.',
+              style: GoogleFonts.poppins(fontSize: 13, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.warningAmber.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Delete customer is intentionally disabled in app for data safety.',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text(
+                  'Close',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

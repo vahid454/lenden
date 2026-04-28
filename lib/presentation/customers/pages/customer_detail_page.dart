@@ -9,7 +9,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/providers/customer_providers.dart';
-import '../../../core/providers/transaction_providers.dart';
 import '../../../core/router/app_router.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/transaction_entity.dart';
@@ -17,7 +16,6 @@ import '../../common/widgets/common_widgets.dart';
 import '../../transactions/pages/add_edit_transaction_page.dart';
 import '../../transactions/providers/transaction_list_provider.dart';
 import '../../transactions/widgets/transaction_tile.dart';
-import '../providers/customer_list_provider.dart';
 import '../../../core/providers/auth_providers.dart';
 import '../../../core/providers/transaction_providers.dart' show transactionsStreamProvider;
 import '../../../core/services/pdf_export_service.dart';
@@ -38,13 +36,34 @@ class CustomerDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Live customer data (balance updates when transactions change)
-    final customer = ref.watch(customersStreamProvider).valueOrNull
-            ?.firstWhere((c) => c.id == customerId,
-                orElse: () => initialCustomer!)
-        ?? initialCustomer;
+    final customersAsync = ref.watch(customersStreamProvider);
+    final customers = customersAsync.valueOrNull;
+
+    // Live customer data (balance updates when transactions change).
+    // Never force-unwrap `initialCustomer` because deep links/opening from
+    // notifications may not pass `extra`.
+    final matchedCustomers =
+        customers?.where((c) => c.id == customerId).toList() ?? const [];
+    final customer =
+        (matchedCustomers.isNotEmpty ? matchedCustomers.first : null) ??
+            initialCustomer;
 
     if (customer == null) {
+      if (customersAsync.hasError) {
+        return Scaffold(
+          appBar: AppBar(),
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Could not open this customer right now. Please go back and try again.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(fontSize: 14),
+              ),
+            ),
+          ),
+        );
+      }
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
@@ -105,7 +124,7 @@ class CustomerDetailPage extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
 
     return SliverAppBar(
-      expandedHeight: 260,
+      expandedHeight: 320,
       pinned:         true,
       backgroundColor: cs.surface,
       leading: IconButton(
@@ -122,25 +141,6 @@ class CustomerDetailPage extends ConsumerWidget {
           icon:    const Icon(Icons.picture_as_pdf_outlined),
           tooltip: 'Export PDF',
           onPressed: () => _exportPdf(context, ref, customer),
-        ),
-        PopupMenuButton<String>(
-          onSelected: (v) async {
-            if (v == 'delete') await _confirmDelete(context, ref, customer);
-          },
-          icon: const Icon(Icons.more_vert_rounded),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              value: 'delete',
-              child: Row(children: [
-                const Icon(Icons.delete_outline_rounded,
-                    color: AppColors.danger, size: 18),
-                const SizedBox(width: 10),
-                Text('Delete Customer',
-                    style: GoogleFonts.poppins(color: AppColors.danger)),
-              ]),
-            ),
-          ],
         ),
         const SizedBox(width: 4),
       ],
@@ -181,43 +181,6 @@ class CustomerDetailPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmDelete(
-    BuildContext context,
-    WidgetRef ref,
-    CustomerEntity customer,
-  ) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Delete ${customer.name}?',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
-        content: Text(
-          'This will permanently delete this customer and all their entries.',
-          style: GoogleFonts.poppins(fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style: GoogleFonts.poppins(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.danger,
-                minimumSize: const Size(90, 40)),
-            child: Text('Delete',
-                style: GoogleFonts.poppins(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-    if (ok == true && context.mounted) {
-      await ref.read(customerListProvider.notifier).deleteCustomer(customer.id);
-      if (context.mounted) context.pop();
-    }
-  }
 }
 
 // ── Header content ────────────────────────────────────────────────────────────
@@ -280,6 +243,7 @@ class _HeaderContent extends ConsumerWidget {
 
             // Quick actions
             _QuickActions(customer: customer, ref: ref),
+            const SizedBox(height: 10),
           ],
         ),
       ),
@@ -411,6 +375,7 @@ class _TransactionListBody extends ConsumerWidget {
 
     return Column(
       children: [
+        const SizedBox(height: 8),
         // ── Section header ──────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
@@ -443,7 +408,7 @@ class _TransactionListBody extends ConsumerWidget {
         Expanded(
           child: txAsync.when(
             loading: () => _buildShimmer(),
-            error:   (e, _) => _buildError(context, e.toString()),
+            error:   (e, _) => _buildError(context, ref, e.toString()),
             data:    (txList) {
               if (txList.isEmpty) return _buildEmpty(context, customer);
               return _buildGroupedList(context, ref, txList, listState, customer);
@@ -631,19 +596,30 @@ class _TransactionListBody extends ConsumerWidget {
     );
   }
 
-  Widget _buildError(BuildContext context, String msg) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Icon(Icons.cloud_off_rounded, size: 48, color: AppColors.danger),
-        const SizedBox(height: 12),
-        Text('Could not load transactions',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
-        Text(msg, style: GoogleFonts.poppins(fontSize: 12), textAlign: TextAlign.center),
-      ]),
-    ),
-  );
+  Widget _buildError(BuildContext context, WidgetRef ref, String msg) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Icon(Icons.cloud_off_rounded, size: 48, color: AppColors.danger),
+            const SizedBox(height: 12),
+            Text('Could not load transactions',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text(msg, style: GoogleFonts.poppins(fontSize: 12), textAlign: TextAlign.center),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: () {
+                ref.invalidate(transactionsStreamProvider(customer.id));
+              },
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: Text(
+                'Retry',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ]),
+        ),
+      );
 
   Widget _buildShimmer() {
     return ListView.builder(
