@@ -5,6 +5,7 @@ class UserEntity extends Equatable {
   final String id;
   final String name;
   final String phone;
+  final String? email;
   final String? businessName;
   final String? photoUrl;
   final DateTime createdAt;
@@ -13,6 +14,7 @@ class UserEntity extends Equatable {
     required this.id,
     required this.name,
     required this.phone,
+    this.email,
     this.businessName,
     this.photoUrl,
     required this.createdAt,
@@ -35,6 +37,7 @@ class UserEntity extends Equatable {
     String? id,
     String? name,
     String? phone,
+    String? email,
     String? businessName,
     String? photoUrl,
     DateTime? createdAt,
@@ -43,6 +46,7 @@ class UserEntity extends Equatable {
       id: id ?? this.id,
       name: name ?? this.name,
       phone: phone ?? this.phone,
+      email: email ?? this.email,
       businessName: businessName ?? this.businessName,
       photoUrl: photoUrl ?? this.photoUrl,
       createdAt: createdAt ?? this.createdAt,
@@ -51,5 +55,5 @@ class UserEntity extends Equatable {
 
   @override
   List<Object?> get props =>
-      [id, name, phone, businessName, photoUrl, createdAt];
+      [id, name, phone, email, businessName, photoUrl, createdAt];
 }

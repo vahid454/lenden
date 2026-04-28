@@ -42,6 +42,17 @@ class Validators {
     return name(value);
   }
 
+  /// Optional email validation (allows empty).
+  static String? optionalEmail(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final trimmed = value.trim();
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    if (!emailRegex.hasMatch(trimmed)) {
+      return 'Please enter a valid email address';
+    }
+    return null;
+  }
+
   /// Validates a monetary amount string.
   static String? amount(String? value) {
     if (value == null || value.isEmpty) {

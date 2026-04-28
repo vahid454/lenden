@@ -186,6 +186,6 @@ class ReportsNotifier extends StateNotifier<ReportsState> {
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 final reportsProvider =
-    StateNotifierProvider.autoDispose<ReportsNotifier, ReportsState>(
+    StateNotifierProvider<ReportsNotifier, ReportsState>(
   (ref) => ReportsNotifier(ref),
 );

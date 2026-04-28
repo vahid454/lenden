@@ -32,6 +32,7 @@ class PdfExportService {
     required CustomerEntity customer,
     required List<TransactionEntity> transactions,
     required String businessName,
+    required String ownerName,
   }) async {
     final doc  = pw.Document(compress: true);
     final font = await PdfGoogleFonts.poppinsRegular();
@@ -55,7 +56,7 @@ class PdfExportService {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             if (p == 0) ...[
-              _buildHeader(font, bold, businessName),
+              _buildHeader(font, bold, businessName, ownerName),
               pw.SizedBox(height: 20),
               _buildCustomerCard(font, bold, customer),
               pw.SizedBox(height: 16),
@@ -100,7 +101,7 @@ class PdfExportService {
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.all(32),
       build: (ctx) => [
-        _buildHeader(font, bold, businessName),
+        _buildHeader(font, bold, businessName, userName),
         pw.SizedBox(height: 16),
         _buildReportPeriod(font, bold, from, to),
         pw.SizedBox(height: 16),
@@ -123,7 +124,12 @@ class PdfExportService {
 
   // ── PDF Widget Builders ───────────────────────────────────────────────────
 
-  pw.Widget _buildHeader(pw.Font font, pw.Font bold, String bizName) {
+  pw.Widget _buildHeader(
+    pw.Font font,
+    pw.Font bold,
+    String bizName,
+    String ownerName,
+  ) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
       decoration: const pw.BoxDecoration(color: _primaryBlue),
@@ -140,6 +146,9 @@ class PdfExportService {
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
             pw.Text('Ledger Report',
                 style: pw.TextStyle(font: bold, fontSize: 13, color: PdfColors.white)),
+            if (ownerName.isNotEmpty)
+              pw.Text('Prepared by: $ownerName',
+                  style: pw.TextStyle(font: font, fontSize: 9, color: PdfColors.white)),
             pw.Text('Generated: ${AppFormatters.shortDate(DateTime.now())}',
                 style: pw.TextStyle(font: font, fontSize: 9, color: PdfColors.white)),
           ]),

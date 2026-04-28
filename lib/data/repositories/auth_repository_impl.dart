@@ -49,11 +49,13 @@ class AuthRepositoryImpl implements AuthRepository {
     required String userId,
     required String name,
     required String phone,
+    String? email,
     String? businessName,
   }) async {
     try {
       final model = await _remote.saveUserProfile(
         userId: userId, name: name, phone: phone,
+        email: email,
         businessName: businessName,
       );
       return Right(model);

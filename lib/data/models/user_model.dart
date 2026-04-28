@@ -9,6 +9,7 @@ class UserModel extends UserEntity {
     required super.id,
     required super.name,
     required super.phone,
+    super.email,
     super.businessName,
     super.photoUrl,
     required super.createdAt,
@@ -22,6 +23,7 @@ class UserModel extends UserEntity {
       id: doc.id,
       name: data['name'] as String? ?? '',
       phone: data['phone'] as String? ?? '',
+      email: data['email'] as String?,
       businessName: data['businessName'] as String?,
       photoUrl: data['photoUrl'] as String?,
       createdAt:
@@ -34,6 +36,7 @@ class UserModel extends UserEntity {
       id: id,
       name: data['name'] as String? ?? '',
       phone: data['phone'] as String? ?? '',
+      email: data['email'] as String?,
       businessName: data['businessName'] as String?,
       photoUrl: data['photoUrl'] as String?,
       createdAt:
@@ -47,6 +50,7 @@ class UserModel extends UserEntity {
     return {
       'name': name,
       'phone': phone,
+      if (email != null && email!.isNotEmpty) 'email': email,
       if (businessName != null) 'businessName': businessName,
       if (photoUrl != null) 'photoUrl': photoUrl,
       'createdAt': Timestamp.fromDate(createdAt),
@@ -63,6 +67,7 @@ class UserModel extends UserEntity {
       id: entity.id,
       name: entity.name,
       phone: entity.phone,
+      email: entity.email,
       businessName: entity.businessName,
       photoUrl: entity.photoUrl,
       createdAt: entity.createdAt,

@@ -81,6 +81,7 @@ class AuthRemoteDataSource {
     required String userId,
     required String name,
     required String phone,
+    String? email,
     String? businessName,
   }) async {
     final currentUser = _auth.currentUser;
@@ -94,6 +95,7 @@ class AuthRemoteDataSource {
       id:           userId,
       name:         name.trim(),
       phone:        phone,
+      email:        (email?.trim().isEmpty ?? true) ? null : email!.trim(),
       businessName: (businessName?.trim().isEmpty ?? true)
                     ? null
                     : businessName!.trim(),

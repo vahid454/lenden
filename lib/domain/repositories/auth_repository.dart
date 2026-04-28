@@ -22,6 +22,7 @@ abstract class AuthRepository {
     required String userId,
     required String name,
     required String phone,
+    String? email,
     String? businessName,
   });
 

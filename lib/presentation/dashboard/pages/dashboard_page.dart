@@ -331,9 +331,9 @@ class _NetBalanceHero extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Row(children: [
-            _NetChip('↓ ₹${AppFormatters.compactCurrency(toReceive)} to receive'),
+            _NetChip('↓ ${AppFormatters.rupee(toReceive)} to receive'),
             const SizedBox(width: 8),
-            _NetChip('↑ ₹${AppFormatters.compactCurrency(toPay)} to pay'),
+            _NetChip('↑ ${AppFormatters.rupee(toPay)} to pay'),
           ]),
         ],
       ),

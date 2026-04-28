@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_providers.dart';
 import '../../../core/providers/customer_providers.dart';
 import '../../../core/router/app_router.dart';
@@ -40,6 +42,7 @@ class ProfileTab extends ConsumerWidget {
           _ProfileCard(
             name:         user?.name ?? '—',
             phone:        user?.phone ?? '—',
+            email:        user?.email,
             businessName: user?.businessName,
             initials:     user?.initials ?? '?',
           ).animate().fadeIn(),
@@ -149,7 +152,7 @@ class ProfileTab extends ConsumerWidget {
             icon:    Icons.shield_outlined,
             iconBg:  const Color(0xFF059669),
             label:   'Privacy Policy',
-            onTap:   () {},
+            onTap:   () => _openPrivacyPolicy(context),
           ).animate().fadeIn(delay: 180.ms),
 
           const SizedBox(height: 24),
@@ -183,34 +186,48 @@ class ProfileTab extends ConsumerWidget {
 
   Future<void> _toggleBiometric(
       BuildContext context, WidgetRef ref, bool enable) async {
-    if (enable) {
-      final canCheck  = await _localAuth.canCheckBiometrics;
-      final available = await _localAuth.getAvailableBiometrics();
+    try {
+      if (enable) {
+        final supported = await _localAuth.isDeviceSupported();
+        final canCheck  = await _localAuth.canCheckBiometrics;
+        final available = await _localAuth.getAvailableBiometrics();
 
-      if (!canCheck || available.isEmpty) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Biometrics not available on this device.'),
-            behavior: SnackBarBehavior.floating,
-          ));
+        if (!supported || !canCheck || available.isEmpty) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Biometrics not available on this device.'),
+              behavior: SnackBarBehavior.floating,
+            ));
+          }
+          return;
         }
-        return;
+
+        final authenticated = await _localAuth.authenticate(
+          localizedReason: 'Authenticate to enable biometric lock',
+          options: const AuthenticationOptions(
+            biometricOnly: true,
+            stickyAuth: true,
+            useErrorDialogs: true,
+          ),
+        );
+
+        if (!authenticated) return;
       }
 
-      final authenticated = await _localAuth.authenticate(
-        localizedReason: 'Authenticate to enable biometric lock',
-        options: const AuthenticationOptions(biometricOnly: true),
-      );
-
-      if (!authenticated) return;
-    }
-
-    await ref.read(cacheServiceProvider).setBiometric(enable);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(enable ? 'Biometric lock enabled.' : 'Biometric lock disabled.'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      await ref.read(cacheServiceProvider).setBiometric(enable);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(enable ? 'Biometric lock enabled.' : 'Biometric lock disabled.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Biometric setup failed. Please try again.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
     }
   }
 
@@ -292,6 +309,14 @@ class ProfileTab extends ConsumerWidget {
   }
 
   Future<void> _openHelpSupport(BuildContext context) async {
+    final subject = Uri.encodeComponent('LenDen Support Request');
+    final body = Uri.encodeComponent(
+      'Hi Admin Team,\n\nI need help with:\n- Customer deletion request\n- Data correction/query\n\nThanks.',
+    );
+    final mailUri = Uri.parse(
+      'mailto:${AppConstants.supportEmail}?subject=$subject&body=$body',
+    );
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -316,6 +341,15 @@ class ProfileTab extends ConsumerWidget {
               'For customer deletion and account-level actions, please contact the admin team from Help & Support.',
               style: GoogleFonts.poppins(fontSize: 13, height: 1.5),
             ),
+            const SizedBox(height: 8),
+            Text(
+              AppConstants.supportEmail,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+              ),
+            ),
             const SizedBox(height: 16),
             Container(
               width: double.infinity,
@@ -333,18 +367,65 @@ class ProfileTab extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 18),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: Text(
-                  'Close',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: Text(
+                    'Close',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    if (await canLaunchUrl(mailUri)) {
+                      await launchUrl(mailUri);
+                    }
+                  },
+                  icon: const Icon(Icons.mail_outline_rounded, size: 18),
+                  label: Text(
+                    'Email Admin',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _openPrivacyPolicy(BuildContext context) async {
+    final uri = Uri.parse(AppConstants.privacyPolicyUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      return;
+    }
+
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Privacy Policy',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+        content: Text(
+          'Your LenDen data is stored securely in your account and shown only to you. '
+          'For privacy concerns, contact ${AppConstants.supportEmail}.',
+          style: GoogleFonts.poppins(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Close',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -355,12 +436,14 @@ class ProfileTab extends ConsumerWidget {
 class _ProfileCard extends StatelessWidget {
   final String  name;
   final String  phone;
+  final String? email;
   final String? businessName;
   final String  initials;
 
   const _ProfileCard({
     required this.name,
     required this.phone,
+    this.email,
     this.businessName,
     required this.initials,
   });
@@ -409,6 +492,11 @@ class _ProfileCard extends StatelessWidget {
         const SizedBox(height: 4),
         Text(AppFormatters.phone(phone), style: GoogleFonts.poppins(
             fontSize: 13, color: cs.onSurface.withOpacity(0.4))),
+        if (email != null && email!.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(email!, style: GoogleFonts.poppins(
+              fontSize: 12, color: cs.onSurface.withOpacity(0.45))),
+        ],
       ]),
     );
   }
@@ -439,7 +527,7 @@ class _StatsRow extends StatelessWidget {
       const SizedBox(width: 10),
       Expanded(child: _StatCard(
         label: 'Receive',
-        value: AppFormatters.compactCurrency(toReceive),
+        value: AppFormatters.currency(toReceive),
         icon:  Icons.arrow_downward_rounded,
         color: AppColors.success,
         prefix: '₹',
@@ -447,7 +535,7 @@ class _StatsRow extends StatelessWidget {
       const SizedBox(width: 10),
       Expanded(child: _StatCard(
         label: 'Pay',
-        value: AppFormatters.compactCurrency(toPay),
+        value: AppFormatters.currency(toPay),
         icon:  Icons.arrow_upward_rounded,
         color: AppColors.danger,
         prefix: '₹',

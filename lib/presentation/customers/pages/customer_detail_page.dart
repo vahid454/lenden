@@ -99,6 +99,7 @@ class CustomerDetailPage extends ConsumerWidget {
         customer:     customer,
         transactions: txs,
         businessName: user?.businessName ?? '',
+        ownerName: user?.name ?? '',
       );
       snack.hideCurrentSnackBar();
       if (context.mounted) {
@@ -287,9 +288,7 @@ class _BalancePill extends StatelessWidget {
   }
 
   String _fmt(double v) {
-    if (v >= 100000) return '${(v/100000).toStringAsFixed(1)}L';
-    if (v >= 1000)   return NumberFormat('#,##,###').format(v);
-    return v % 1 == 0 ? v.toInt().toString() : v.toStringAsFixed(2);
+    return AppFormatters.currency(v);
   }
 }
 
@@ -322,10 +321,14 @@ class _QuickActions extends ConsumerWidget {
           );
         }),
         const SizedBox(width: 8),
-        _Btn(Icons.share_outlined,   'Share',   const Color(0xFF25D366), () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Opening WhatsApp…'),
-                behavior: SnackBarBehavior.floating),
+        _Btn(Icons.share_outlined,   'Share',   const Color(0xFF25D366), () async {
+          final txs = ref.read(transactionsStreamProvider(customer.id)).valueOrNull ?? [];
+          final user = ref.read(currentUserProvider);
+          await ShareService.shareOnWhatsApp(
+            customer: customer,
+            transactions: txs,
+            senderName: user?.name ?? 'LenDen User',
+            businessName: user?.businessName ?? '',
           );
         }),
       ],
@@ -461,7 +464,6 @@ class _TransactionListBody extends ConsumerWidget {
                 isDeleting:     listState.deletingId == tx.id,
                 animationIndex: idx,
                 onEdit: () => _openEdit(context, customer, tx),
-                onDelete: () => _confirmDelete(context, ref, tx),
               );
             }),
           ],
@@ -491,70 +493,6 @@ class _TransactionListBody extends ConsumerWidget {
         transitionDuration: const Duration(milliseconds: 320),
       ),
     );
-  }
-
-  Future<void> _confirmDelete(
-    BuildContext context,
-    WidgetRef ref,
-    TransactionEntity tx,
-  ) async {
-    final cs    = Theme.of(context).colorScheme;
-    final label = tx.isGave ? 'You Gave' : 'You Got';
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Delete Entry?',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
-        content: RichText(
-          text: TextSpan(
-            style: GoogleFonts.poppins(fontSize: 14, color: cs.onSurface),
-            children: [
-              const TextSpan(text: 'Delete '),
-              TextSpan(
-                text: '$label ₹${tx.amount.toStringAsFixed(0)}',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              const TextSpan(
-                  text: '? This will also adjust the balance.'),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style: GoogleFonts.poppins(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.danger,
-                minimumSize:     const Size(90, 40)),
-            child: Text('Delete',
-                style: GoogleFonts.poppins(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (ok == true && context.mounted) {
-      final success = await ref
-          .read(transactionListProvider(tx.customerId).notifier)
-          .deleteTransaction(tx);
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(success ? 'Entry deleted.' : 'Delete failed.'),
-          backgroundColor:
-              success ? AppColors.success : AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
-        ));
-      }
-    }
   }
 
   // ── Empty state ───────────────────────────────────────────────────────────
@@ -711,8 +649,6 @@ class _MonthHeader extends StatelessWidget {
   }
 
   String _fmt(double v) {
-    if (v >= 100000) return '${(v/100000).toStringAsFixed(1)}L';
-    if (v >= 1000)   return NumberFormat('#,##,###').format(v);
-    return v.toInt().toString();
+    return AppFormatters.currency(v);
   }
 }

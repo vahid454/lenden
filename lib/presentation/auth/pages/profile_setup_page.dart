@@ -28,8 +28,10 @@ class ProfileSetupPage extends ConsumerStatefulWidget {
 class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
   final _formKey      = GlobalKey<FormState>();
   final _nameCtrl     = TextEditingController();
+  final _emailCtrl    = TextEditingController();
   final _businessCtrl = TextEditingController();
   final _nameFocus    = FocusNode();
+  final _emailFocus   = FocusNode();
   final _bizFocus     = FocusNode();
 
   @override
@@ -43,8 +45,10 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _emailCtrl.dispose();
     _businessCtrl.dispose();
     _nameFocus.dispose();
+    _emailFocus.dispose();
     _bizFocus.dispose();
     super.dispose();
   }
@@ -58,6 +62,7 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
       userId:       widget.userId,
       name:         _nameCtrl.text.trim(),
       phone:        widget.phone,
+      email:        _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
       businessName: _businessCtrl.text.trim().isEmpty
                     ? null
                     : _businessCtrl.text.trim(),
@@ -153,10 +158,30 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
                         focusNode: _nameFocus,
                         maxLength: AppConstants.maxNameLength,
                         textInputAction: TextInputAction.next,
-                        onEditingComplete: () => _bizFocus.requestFocus(),
+                        onEditingComplete: () => _emailFocus.requestFocus(),
                         validator: Validators.name,
                         onChanged: (_) => setState(() {}),
                       ).animate().fadeIn(delay: 400.ms),
+
+                      const SizedBox(height: 20),
+
+                      Text('Email (Optional)',
+                          style: GoogleFonts.poppins(
+                              fontSize: 13, fontWeight: FontWeight.w600,
+                              color: colorScheme.onSurface.withOpacity(0.7)))
+                          .animate().fadeIn(delay: 425.ms),
+                      const SizedBox(height: 8),
+                      AppTextField(
+                        controller: _emailCtrl,
+                        label: 'Email Address',
+                        hint: 'e.g. yourname@example.com',
+                        prefixIcon: Icons.alternate_email_rounded,
+                        focusNode: _emailFocus,
+                        textInputAction: TextInputAction.next,
+                        keyboardType: TextInputType.emailAddress,
+                        validator: Validators.optionalEmail,
+                        onEditingComplete: () => _bizFocus.requestFocus(),
+                      ).animate().fadeIn(delay: 450.ms),
 
                       const SizedBox(height: 20),
 
@@ -175,7 +200,7 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
                         maxLength: AppConstants.maxNameLength,
                         textInputAction: TextInputAction.done,
                         onEditingComplete: _onSave,
-                      ).animate().fadeIn(delay: 500.ms),
+                      ).animate().fadeIn(delay: 525.ms),
 
                       const SizedBox(height: 12),
                       Text(

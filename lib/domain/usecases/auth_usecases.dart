@@ -45,12 +45,14 @@ class SaveUserProfileUseCase {
     required String userId,
     required String name,
     required String phone,
+    String? email,
     String? businessName,
   }) {
     return _repository.saveUserProfile(
       userId: userId,
       name: name,
       phone: phone,
+      email: email,
       businessName: businessName,
     );
   }

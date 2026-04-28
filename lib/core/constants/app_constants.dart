@@ -42,6 +42,8 @@ class AppConstants {
   static const String appName    = 'LenDen';
   static const String appVersion = '1.0.0';
   static const String appTagline = 'Apna hisaab, apni marzi';
+  static const String supportEmail = 'vahidmansuri702@gmail.com';
+  static const String privacyPolicyUrl = 'https://lenden.app/privacy';
 
   // ── Country ───────────────────────────────────────────────────────────────
   static const String defaultCountryCode = '+91';

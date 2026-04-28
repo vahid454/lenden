@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/app_formatters.dart';
 import '../../../domain/entities/customer_entity.dart';
 
 /// Displays a single customer as a list tile with avatar, name, phone,
@@ -193,12 +193,7 @@ class CustomerCard extends StatelessWidget {
   }
 
   String _formatAmount(double amount) {
-    if (amount >= 10000000) return '${(amount / 10000000).toStringAsFixed(1)}Cr';
-    if (amount >= 100000) return '${(amount / 100000).toStringAsFixed(1)}L';
-    if (amount >= 1000) {
-      return NumberFormat('#,##,###').format(amount);
-    }
-    return amount.toStringAsFixed(0);
+    return AppFormatters.currency(amount);
   }
 }
 

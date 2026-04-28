@@ -36,9 +36,8 @@ service cloud.firestore {
                       && resource.data.userId == request.auth.uid
                       && request.resource.data.userId == request.auth.uid;
 
-      // DELETE: owner only
-      allow delete: if isSignedIn()
-                      && resource.data.userId == request.auth.uid;
+      // Deletion is blocked in app for long-term financial record retention.
+      allow delete: if false;
     }
 
     // ── Transactions ──────────────────────────────────────────────────────
@@ -58,8 +57,8 @@ service cloud.firestore {
                       && request.resource.data.amount is number
                       && request.resource.data.amount > 0;
 
-      allow delete: if isSignedIn()
-                      && resource.data.userId == request.auth.uid;
+      // Deletion is blocked in app for long-term financial record retention.
+      allow delete: if false;
     }
   }
 }

@@ -25,6 +25,7 @@ class ProfileSetupNotifier extends StateNotifier<ProfileSetupState> {
     required String userId,
     required String name,
     required String phone,
+    String? email,
     String? businessName,
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
@@ -34,6 +35,7 @@ class ProfileSetupNotifier extends StateNotifier<ProfileSetupState> {
       userId:       userId,
       name:         name,
       phone:        phone,
+      email:        email,
       businessName: businessName,
     );
 

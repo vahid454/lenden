@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/app_formatters.dart';
 import '../../../domain/entities/transaction_entity.dart';
 
 /// A single transaction row in the ledger.
@@ -193,9 +194,7 @@ class TransactionTile extends StatelessWidget {
   String _formatTime(DateTime dt) => DateFormat('h:mm a').format(dt);
 
   String _fmtAmount(double v) {
-    if (v >= 100000) return '${(v / 100000).toStringAsFixed(1)}L';
-    if (v >= 1000)   return NumberFormat('#,##,###').format(v);
-    return v % 1 == 0 ? v.toInt().toString() : v.toStringAsFixed(2);
+    return AppFormatters.currency(v);
   }
 }
 
