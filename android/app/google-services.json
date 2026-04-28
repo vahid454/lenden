@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "32335035212",
+    "project_id": "lenden-f8557",
+    "storage_bucket": "lenden-f8557.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:32335035212:android:026db5578c2beaddf9ede9",
+        "android_client_info": {
+          "package_name": "com.example.lenden"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBnI2KxsTi3FnjGDj6yWm8Lb-UXpc1-pfI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:32335035212:android:1afdc9b18d2218c2f9ede9",
+        "android_client_info": {
+          "package_name": "com.vahid.lenden"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBnI2KxsTi3FnjGDj6yWm8Lb-UXpc1-pfI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:32335035212:android:e9324b9c59f22005f9ede9",
+        "android_client_info": {
+          "package_name": "com.yourcompany.lenden"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBnI2KxsTi3FnjGDj6yWm8Lb-UXpc1-pfI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

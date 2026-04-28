@@ -1,0 +1,83 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+    id "com.google.gms.google-services"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '4'
+def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0.0'
+
+// ── Read keystore properties if present (release signing) ────────────────────
+def keystorePropertiesFile = rootProject.file("key.properties")
+def keystoreProperties     = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    namespace    "com.yourcompany.lenden"
+    compileSdk   35
+    ndkVersion   "27.0.12077973"   // matches all Firebase/plugin requirements
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    kotlinOptions {
+        jvmTarget = '11'
+    }
+
+    defaultConfig {
+        applicationId   "com.yourcompany.lenden"
+        minSdk          23       // Required for biometric + Firebase Auth
+        targetSdk       35
+        versionCode     flutterVersionCode.toInteger()
+        versionName     flutterVersionName
+        multiDexEnabled true
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            release {
+                keyAlias       keystoreProperties['keyAlias']
+                keyPassword    keystoreProperties['keyPassword']
+                storeFile      file(keystoreProperties['storeFile'])
+                storePassword  keystoreProperties['storePassword']
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix   "-debug"
+        }
+        release {
+            signingConfig   keystorePropertiesFile.exists()
+                            ? signingConfigs.release
+                            : signingConfigs.debug
+            minifyEnabled   false   // Set true only after testing ProGuard rules
+            shrinkResources false
+            proguardFiles   getDefaultProguardFile('proguard-android-optimize.txt'),
+                            'proguard-rules.pro'
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+    implementation 'androidx.multidex:multidex:2.0.1'
+}

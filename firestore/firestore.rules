@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ── Users ─────────────────────────────────────────────────────────────
+    // Any signed-in user can read/write their own document.
+    // Relaxed validation so token-timing issues don't block profile save.
+    match /users/{userId} {
+      allow read:   if isOwner(userId);
+      allow write:  if isOwner(userId);
+    }
+
+    // ── Customers ─────────────────────────────────────────────────────────
+    match /customers/{customerId} {
+      // READ: owner only
+      allow read: if isSignedIn()
+                    && resource.data.userId == request.auth.uid;
+
+      // CREATE: must be owner, valid name & phone
+      allow create: if isSignedIn()
+                      && request.resource.data.userId == request.auth.uid
+                      && request.resource.data.name is string
+                      && request.resource.data.name.size() > 0
+                      && request.resource.data.phone is string;
+
+      // UPDATE: owner can update — balance updated atomically by backend
+      allow update: if isSignedIn()
+                      && resource.data.userId == request.auth.uid
+                      && request.resource.data.userId == request.auth.uid;
+
+      // DELETE: owner only
+      allow delete: if isSignedIn()
+                      && resource.data.userId == request.auth.uid;
+    }
+
+    // ── Transactions ──────────────────────────────────────────────────────
+    match /transactions/{transactionId} {
+      allow read: if isSignedIn()
+                    && resource.data.userId == request.auth.uid;
+
+      allow create: if isSignedIn()
+                      && request.resource.data.userId == request.auth.uid
+                      && request.resource.data.amount is number
+                      && request.resource.data.amount > 0
+                      && request.resource.data.type in ['gave', 'got'];
+
+      allow update: if isSignedIn()
+                      && resource.data.userId == request.auth.uid
+                      && request.resource.data.userId == request.auth.uid
+                      && request.resource.data.amount is number
+                      && request.resource.data.amount > 0;
+
+      allow delete: if isSignedIn()
+                      && resource.data.userId == request.auth.uid;
+    }
+  }
+}

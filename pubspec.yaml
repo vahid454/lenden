@@ -1,0 +1,66 @@
+name: lenden
+description: LenDen - Personal & Business Credit Tracker for India
+publish_to: 'none'
+version: 1.0.0+4
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ── Firebase ──────────────────────────────────────────────────────────────
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  cloud_firestore: ^5.4.4
+  firebase_messaging: ^15.1.3
+
+  # ── State Management ──────────────────────────────────────────────────────
+  flutter_riverpod: ^2.5.1
+
+  # ── Navigation ────────────────────────────────────────────────────────────
+  go_router: ^14.2.7
+
+  # ── Local Storage / Offline Cache ─────────────────────────────────────────
+  shared_preferences: ^2.3.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # ── UI & Fonts ────────────────────────────────────────────────────────────
+  google_fonts: ^6.2.1
+  flutter_animate: ^4.5.0
+  pinput: ^5.0.0
+  fl_chart: ^0.69.0               # Phase 4: bar/line charts for reports
+
+  # ── Export & Sharing ─────────────────────────────────────────────────────
+  pdf: ^3.11.1                    # Phase 4: PDF generation
+  printing: ^5.13.2               # Phase 4: print/share PDF
+  share_plus: ^10.0.2             # Phase 4: share sheet
+  path_provider: ^2.1.4           # Phase 4: temp file path
+  permission_handler: ^11.3.1     # Phase 4: storage/notification perms
+  open_file: ^3.3.2               # Phase 4: open exported PDF
+
+  # ── Utilities ─────────────────────────────────────────────────────────────
+  intl: ^0.19.0
+  logger: ^2.4.0
+  equatable: ^2.0.5
+  dartz: ^0.10.1
+  url_launcher: ^6.3.0
+  connectivity_plus: ^6.0.5       # Phase 4: network state
+  local_auth: ^2.3.0              # Phase 4: biometric/PIN lock
+  package_info_plus: ^8.0.2       # Phase 4: app version info
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.12
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/animations/
+    - assets/icons/
