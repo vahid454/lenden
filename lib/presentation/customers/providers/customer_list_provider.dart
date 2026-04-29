@@ -1,8 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/providers/auth_providers.dart';
 import '../../../core/providers/customer_providers.dart';
 import '../../../domain/entities/customer_entity.dart';
 
@@ -51,50 +48,42 @@ class CustomerListState {
 
 class CustomerListNotifier extends StateNotifier<CustomerListState> {
   final Ref _ref;
-  Timer? _searchDebounce;
 
   CustomerListNotifier(this._ref) : super(const CustomerListState());
-
-  @override
-  void dispose() {
-    _searchDebounce?.cancel();
-    super.dispose();
-  }
 
   // ── Search ────────────────────────────────────────────────────────────────
 
   void onSearchChanged(String query) {
-    state = state.copyWith(searchQuery: query, isSearching: query.isNotEmpty);
-    _searchDebounce?.cancel();
+    final trimmedQuery = query.trim();
+    state = state.copyWith(
+      searchQuery: query,
+      isSearching: trimmedQuery.isNotEmpty,
+    );
 
-    if (query.trim().isEmpty) {
+    if (trimmedQuery.isEmpty) {
       state = state.copyWith(clearSearch: true, isSearching: false);
       return;
     }
 
-    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
-      _performSearch(query.trim());
-    });
+    _performSearch(trimmedQuery);
   }
 
-  Future<void> _performSearch(String query) async {
-    final userId = _ref.read(currentUserProvider)?.id;
-    if (userId == null || userId.isEmpty) return;
+  void _performSearch(String query) {
+    final visibleCustomers = _ref.read(visibleCustomersProvider);
+    final lowerQuery = query.toLowerCase();
+    final list = visibleCustomers.where((customer) {
+      return customer.name.toLowerCase().contains(lowerQuery) ||
+          customer.phone.contains(query);
+    }).toList();
 
-    state = state.copyWith(isSearchLoading: true);
-
-    final useCase = _ref.read(searchCustomersUseCaseProvider);
-    final result  = await useCase(userId: userId, query: query);
-
-    result.fold(
-      (f) => state = state.copyWith(isSearchLoading: false, errorMessage: f.message),
-      (list) => state = state.copyWith(
-          isSearchLoading: false, searchResults: list, clearError: true),
+    state = state.copyWith(
+      isSearchLoading: false,
+      searchResults: list,
+      clearError: true,
     );
   }
 
   void clearSearch() {
-    _searchDebounce?.cancel();
     state = const CustomerListState();
   }
 

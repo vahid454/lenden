@@ -13,7 +13,7 @@ final transactionRemoteDataSourceProvider =
     Provider<TransactionRemoteDataSource>((ref) {
   return TransactionRemoteDataSource(
     firestore: ref.watch(firestoreProvider),
-    logger:    ref.watch(loggerProvider),
+    logger: ref.watch(loggerProvider),
   );
 });
 
@@ -28,20 +28,19 @@ final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
 
 // ── Use cases ─────────────────────────────────────────────────────────────────
 
-final watchTransactionsUseCaseProvider =
-    Provider<WatchTransactionsUseCase>((ref) =>
+final watchTransactionsUseCaseProvider = Provider<WatchTransactionsUseCase>(
+    (ref) =>
         WatchTransactionsUseCase(ref.watch(transactionRepositoryProvider)));
 
-final addTransactionUseCaseProvider =
-    Provider<AddTransactionUseCase>((ref) =>
-        AddTransactionUseCase(ref.watch(transactionRepositoryProvider)));
+final addTransactionUseCaseProvider = Provider<AddTransactionUseCase>(
+    (ref) => AddTransactionUseCase(ref.watch(transactionRepositoryProvider)));
 
-final updateTransactionUseCaseProvider =
-    Provider<UpdateTransactionUseCase>((ref) =>
+final updateTransactionUseCaseProvider = Provider<UpdateTransactionUseCase>(
+    (ref) =>
         UpdateTransactionUseCase(ref.watch(transactionRepositoryProvider)));
 
-final deleteTransactionUseCaseProvider =
-    Provider<DeleteTransactionUseCase>((ref) =>
+final deleteTransactionUseCaseProvider = Provider<DeleteTransactionUseCase>(
+    (ref) =>
         DeleteTransactionUseCase(ref.watch(transactionRepositoryProvider)));
 
 final getTransactionsByDateRangeUseCaseProvider =
@@ -51,13 +50,10 @@ final getTransactionsByDateRangeUseCaseProvider =
 
 // ── Stream per customer ───────────────────────────────────────────────────────
 
-// keepAlive so stream doesn't reset on brief navigation away
-final transactionsStreamProvider = StreamProvider
-    .family<List<TransactionEntity>, String>((ref, customerId) async* {
-  // Emit a quick initial value so UI does not stay on shimmer
-  // while Firestore establishes the first snapshot.
-  yield const <TransactionEntity>[];
-
+// Keep this stream alive while navigating so ledger history stays stable.
+final transactionsStreamProvider =
+    StreamProvider.family<List<TransactionEntity>, String>(
+        (ref, customerId) async* {
   // Guard: don't subscribe with empty id
   if (customerId.isEmpty) {
     return;

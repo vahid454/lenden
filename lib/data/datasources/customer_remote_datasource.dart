@@ -40,6 +40,23 @@ class CustomerRemoteDataSource {
         });
   }
 
+  Stream<List<CustomerModel>> watchCustomersByPhone(String phone) {
+    return _col
+        .where('phone', isEqualTo: phone)
+        .snapshots()
+        .handleError((error) {
+          _logger.e('watchCustomersByPhone error: $error');
+        })
+        .map((snapshot) {
+          final list = snapshot.docs
+              .map((doc) => CustomerModel.fromFirestore(doc))
+              .toList();
+          list.sort((a, b) =>
+              a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+          return list;
+        });
+  }
+
   // ── Add ───────────────────────────────────────────────────────────────────
   Future<CustomerModel> addCustomer(CustomerModel customer) async {
     try {

@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/app_formatters.dart';
 import '../../../domain/entities/transaction_entity.dart';
 import '../../common/widgets/common_widgets.dart';
 import '../providers/transaction_form_provider.dart';
@@ -15,12 +16,16 @@ import '../providers/transaction_form_provider.dart';
 class AddEditTransactionPage extends ConsumerStatefulWidget {
   final String              customerId;
   final String              customerName;
+  final double              currentBalance;
+  final TransactionType?    initialType;
   final TransactionEntity?  existingTransaction; // non-null = edit mode
 
   const AddEditTransactionPage({
     super.key,
     required this.customerId,
     required this.customerName,
+    this.currentBalance = 0,
+    this.initialType,
     this.existingTransaction,
   });
 
@@ -44,18 +49,26 @@ class _AddEditTransactionPageState
   void initState() {
     super.initState();
     final e = widget.existingTransaction;
-    _type         = e?.type ?? TransactionType.gave;
+    _type         = e?.type ?? widget.initialType ?? TransactionType.gave;
     _selectedDate = e?.date ?? DateTime.now();
     _amountCtrl.text =
         e != null ? (e.amount % 1 == 0 ? e.amount.toInt().toString() : e.amount.toStringAsFixed(2)) : '';
     _noteCtrl.text = e?.note ?? '';
+    _amountCtrl.addListener(_handleAmountChanged);
   }
 
   @override
   void dispose() {
+    _amountCtrl.removeListener(_handleAmountChanged);
     _amountCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
+  }
+
+  void _handleAmountChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   // ── Date picker ───────────────────────────────────────────────────────────
@@ -88,9 +101,9 @@ class _AddEditTransactionPageState
     final notifier = ref.read(
         transactionFormProvider(widget.customerId).notifier);
 
-    bool success;
+    TransactionEntity? savedTransaction;
     if (widget.isEditing) {
-      success = await notifier.updateTransaction(
+      savedTransaction = await notifier.updateTransaction(
         existing: widget.existingTransaction!,
         amount:   amount,
         type:     _type,
@@ -98,7 +111,7 @@ class _AddEditTransactionPageState
         note:     _noteCtrl.text,
       );
     } else {
-      success = await notifier.addTransaction(
+      savedTransaction = await notifier.addTransaction(
         customerId: widget.customerId,
         amount:     amount,
         type:       _type,
@@ -107,9 +120,9 @@ class _AddEditTransactionPageState
       );
     }
 
-    if (success && mounted) {
+    if (savedTransaction != null && mounted) {
       HapticFeedback.mediumImpact();
-      Navigator.of(context).pop(true); // signal success to caller
+      Navigator.of(context).pop(savedTransaction);
     }
   }
 
@@ -117,6 +130,13 @@ class _AddEditTransactionPageState
   Widget build(BuildContext context) {
     final state = ref.watch(transactionFormProvider(widget.customerId));
     final cs    = Theme.of(context).colorScheme;
+    final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0;
+    final currentBalance = widget.currentBalance;
+    final baseBalance = widget.isEditing
+        ? currentBalance - (widget.existingTransaction?.balanceDelta ?? 0)
+        : currentBalance;
+    final projectedBalance =
+        baseBalance + (_type == TransactionType.gave ? amount : -amount);
 
     return KeyboardDismissWrapper(
       child: Scaffold(
@@ -159,8 +179,21 @@ class _AddEditTransactionPageState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ── Customer banner ────────────────────────────────────
-                  _CustomerBanner(name: widget.customerName)
+                  _CustomerBanner(
+                    name: widget.customerName,
+                    currentBalance: currentBalance,
+                  )
                       .animate().fadeIn(),
+
+                  const SizedBox(height: 16),
+
+                  _BalancePreviewCard(
+                    currentBalance: currentBalance,
+                    projectedBalance: projectedBalance,
+                    selectedType: _type,
+                    isEditing: widget.isEditing,
+                    amount: amount,
+                  ).animate().fadeIn(delay: 40.ms),
 
                   const SizedBox(height: 24),
 
@@ -239,7 +272,11 @@ class _AddEditTransactionPageState
 
 class _CustomerBanner extends StatelessWidget {
   final String name;
-  const _CustomerBanner({required this.name});
+  final double currentBalance;
+  const _CustomerBanner({
+    required this.name,
+    required this.currentBalance,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -268,6 +305,208 @@ class _CustomerBanner extends StatelessWidget {
             name,
             style: GoogleFonts.poppins(
                 fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              _headlineBalance(currentBalance),
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: cs.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _headlineBalance(double balance) {
+    if (balance == 0) return 'Settled';
+    final label = balance > 0 ? 'To receive' : 'To pay';
+    return '$label ${AppFormatters.rupee(balance.abs())}';
+  }
+}
+
+class _BalancePreviewCard extends StatelessWidget {
+  final double currentBalance;
+  final double projectedBalance;
+  final TransactionType selectedType;
+  final bool isEditing;
+  final double amount;
+
+  const _BalancePreviewCard({
+    required this.currentBalance,
+    required this.projectedBalance,
+    required this.selectedType,
+    required this.isEditing,
+    required this.amount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final accent =
+        selectedType == TransactionType.gave ? AppColors.success : AppColors.danger;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            accent.withOpacity(0.12),
+            cs.surface,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accent.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  selectedType == TransactionType.gave
+                      ? Icons.arrow_upward_rounded
+                      : Icons.arrow_downward_rounded,
+                  color: accent,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      selectedType == TransactionType.gave ? 'You Gave' : 'You Got',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      amount > 0
+                          ? _changeSummary()
+                          : 'Enter amount to preview the updated payable balance.',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: cs.onSurface.withOpacity(0.6),
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _PreviewAmount(
+                  label: 'Current balance',
+                  value: _balanceLabel(currentBalance),
+                  color: _balanceColor(currentBalance),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _PreviewAmount(
+                  label: isEditing ? 'Updated balance' : 'After this entry',
+                  value: _balanceLabel(projectedBalance),
+                  color: _balanceColor(projectedBalance),
+                  highlight: true,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _changeSummary() {
+    final amountLabel = AppFormatters.rupee(amount);
+    if (selectedType == TransactionType.gave) {
+      return 'This will increase receivable by $amountLabel.';
+    }
+    return 'This will reduce receivable by $amountLabel.';
+  }
+
+  String _balanceLabel(double balance) {
+    if (balance == 0) return 'Settled';
+    final prefix = balance > 0 ? 'To receive' : 'To pay';
+    return '$prefix ${AppFormatters.rupee(balance.abs())}';
+  }
+
+  Color _balanceColor(double balance) {
+    if (balance == 0) return Colors.grey.shade700;
+    return balance > 0 ? AppColors.success : AppColors.danger;
+  }
+}
+
+class _PreviewAmount extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final bool highlight;
+
+  const _PreviewAmount({
+    required this.label,
+    required this.value,
+    required this.color,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: highlight ? color.withOpacity(0.08) : cs.surface.withOpacity(0.65),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: highlight ? color.withOpacity(0.18) : cs.outline.withOpacity(0.08),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurface.withOpacity(0.52),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
           ),
         ],
       ),

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/providers/auth_providers.dart';
 import '../../../core/providers/customer_providers.dart';
 import '../../../core/router/app_router.dart';
 import '../../../domain/entities/customer_entity.dart';
@@ -14,13 +15,15 @@ import '../widgets/customer_card.dart';
 import '../widgets/customer_search_bar.dart';
 
 /// Displays all customers for the logged-in user in real-time.
-/// Supports inline search, swipe-to-delete confirmation, and add/edit navigation.
+/// Supports inline search and quick navigation into each ledger.
 class CustomerListPage extends ConsumerWidget {
   const CustomerListPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final customersAsync = ref.watch(customersStreamProvider);
+    final sharedCustomersAsync = ref.watch(sharedCustomersStreamProvider);
+    final visibleCustomers = ref.watch(visibleCustomersProvider);
     final listState = ref.watch(customerListProvider);
 
     return Scaffold(
@@ -50,7 +53,13 @@ class CustomerListPage extends ConsumerWidget {
           Expanded(
             child: listState.isSearching
                 ? _buildSearchResults(context, ref, listState)
-                : _buildCustomerList(context, ref, customersAsync),
+                : _buildCustomerList(
+                    context,
+                    ref,
+                    customersAsync: customersAsync,
+                    sharedCustomersAsync: sharedCustomersAsync,
+                    visibleCustomers: visibleCustomers,
+                  ),
           ),
         ],
       ),
@@ -68,12 +77,12 @@ class CustomerListPage extends ConsumerWidget {
         children: [
           Text(
             'Customers',
-            style: GoogleFonts.poppins(
-                fontSize: 20, fontWeight: FontWeight.w700),
+            style:
+                GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700),
           ),
           Consumer(builder: (ctx, ref, _) {
             final count =
-                ref.watch(customersStreamProvider).valueOrNull?.length ?? 0;
+                ref.watch(visibleCustomersProvider).length;
             return Text(
               '$count ${count == 1 ? 'party' : 'parties'}',
               style: GoogleFonts.poppins(
@@ -93,16 +102,25 @@ class CustomerListPage extends ConsumerWidget {
   Widget _buildCustomerList(
     BuildContext context,
     WidgetRef ref,
-    AsyncValue<List<CustomerEntity>> customersAsync,
-  ) {
-    return customersAsync.when(
-      loading: () => _buildShimmerList(),
-      error: (e, _) => _buildErrorState(context, e.toString()),
-      data: (customers) {
-        if (customers.isEmpty) return _buildEmptyState(context);
-        return _buildList(context, ref, customers);
-      },
-    );
+    {
+    required AsyncValue<List<CustomerEntity>> customersAsync,
+    required AsyncValue<List<CustomerEntity>> sharedCustomersAsync,
+    required List<CustomerEntity> visibleCustomers,
+  }) {
+    if (visibleCustomers.isNotEmpty) {
+      return _buildList(context, ref, visibleCustomers);
+    }
+
+    if (customersAsync.isLoading || sharedCustomersAsync.isLoading) {
+      return _buildShimmerList();
+    }
+
+    final error = customersAsync.asError?.error ?? sharedCustomersAsync.asError?.error;
+    if (error != null) {
+      return _buildErrorState(context, error.toString());
+    }
+
+    return _buildEmptyState(context);
   }
 
   // ── Search Results ─────────────────────────────────────────────────────────
@@ -140,17 +158,18 @@ class CustomerListPage extends ConsumerWidget {
       itemBuilder: (context, index) {
         final customer = customers[index];
         final isDeleting = listState.deletingId == customer.id;
+        final currentUserId = ref.watch(currentUserProvider)?.id;
+        final isSharedLedger =
+            currentUserId != null && customer.userId != currentUserId;
 
         return CustomerCard(
           customer: customer,
           animationIndex: index,
           isDeleting: isDeleting,
+          invertPerspective: isSharedLedger,
+          showSharedBadge: isSharedLedger,
           onTap: () => context.push(
             AppRoutes.customerDetail(customer.id),
-            extra: customer,
-          ),
-          onEdit: () => context.push(
-            AppRoutes.editCustomer,
             extra: customer,
           ),
         );
@@ -196,9 +215,7 @@ class CustomerListPage extends ConsumerWidget {
                 color: colorScheme.primary.withOpacity(0.5),
               ),
             ).animate().scale(curve: Curves.elasticOut, duration: 600.ms),
-
             const SizedBox(height: 24),
-
             Text(
               'No customers yet',
               style: GoogleFonts.poppins(
@@ -206,9 +223,7 @@ class CustomerListPage extends ConsumerWidget {
                 fontWeight: FontWeight.w700,
               ),
             ).animate().fadeIn(delay: 200.ms),
-
             const SizedBox(height: 8),
-
             Text(
               'Add your first customer and start\ntracking your udhar.',
               style: GoogleFonts.poppins(
@@ -218,9 +233,7 @@ class CustomerListPage extends ConsumerWidget {
               ),
               textAlign: TextAlign.center,
             ).animate().fadeIn(delay: 300.ms),
-
             const SizedBox(height: 28),
-
             OutlinedButton.icon(
               onPressed: () => context.push(AppRoutes.addCustomer),
               icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
@@ -299,10 +312,8 @@ class CustomerListPage extends ConsumerWidget {
               error,
               style: GoogleFonts.poppins(
                   fontSize: 12,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withOpacity(0.5)),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.5)),
               textAlign: TextAlign.center,
             ),
           ],

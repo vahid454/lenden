@@ -1,30 +1,45 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:lenden/main.dart';
+import 'package:lenden/domain/entities/customer_entity.dart';
+import 'package:lenden/domain/entities/transaction_entity.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('customer initials and balance helpers work', () {
+    final customer = CustomerEntity(
+      id: 'c1',
+      userId: 'u1',
+      name: 'Rahul Sharma',
+      phone: '9999999999',
+      createdAt: DateTime(2024),
+      balance: 1250,
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(customer.initials, 'RS');
+    expect(customer.isCreditor, isTrue);
+    expect(customer.absBalance, 1250);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  test('transaction type keeps balance direction correct', () {
+    final gave = TransactionEntity(
+      id: 't1',
+      customerId: 'c1',
+      userId: 'u1',
+      amount: 500,
+      type: TransactionType.gave,
+      date: DateTime(2024),
+      createdAt: DateTime(2024),
+    );
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    final got = TransactionEntity(
+      id: 't2',
+      customerId: 'c1',
+      userId: 'u1',
+      amount: 300,
+      type: TransactionType.got,
+      date: DateTime(2024),
+      createdAt: DateTime(2024),
+    );
+
+    expect(gave.balanceDelta, 500);
+    expect(got.balanceDelta, -300);
   });
 }

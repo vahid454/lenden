@@ -3,7 +3,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:local_auth/local_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
@@ -17,9 +16,7 @@ import '../../../core/utils/app_formatters.dart';
 import '../../common/widgets/common_widgets.dart';
 
 class ProfileTab extends ConsumerWidget {
-  ProfileTab({super.key});
-
-  final LocalAuthentication _localAuth = LocalAuthentication();
+  const ProfileTab({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -68,17 +65,6 @@ class ProfileTab extends ConsumerWidget {
             );
           }),
         ).animate().fadeIn(delay: 100.ms),
-
-        const SizedBox(height: 8),
-
-        // ── Security ──────────────────────────────────────────────────────
-        _SectionHeader(label: 'Security'),
-        const SizedBox(height: 8),
-
-        // Biometric — stateful so switch reflects current Hive value
-        _BiometricTile(localAuth: _localAuth).animate().fadeIn(delay: 120.ms),
-
-        const SizedBox(height: 8),
 
         // ── Support ───────────────────────────────────────────────────────
         _SectionHeader(label: 'Support'),
@@ -395,82 +381,6 @@ class ProfileTab extends ConsumerWidget {
   }
 }
 
-// ── Biometric tile — stateful so switch updates after toggle ─────────────────
-
-class _BiometricTile extends ConsumerStatefulWidget {
-  final LocalAuthentication localAuth;
-  const _BiometricTile({required this.localAuth});
-
-  @override
-  ConsumerState<_BiometricTile> createState() => _BiometricTileState();
-}
-
-class _BiometricTileState extends ConsumerState<_BiometricTile> {
-  bool _enabled = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _enabled = ref.read(cacheServiceProvider).isBiometricEnabled;
-  }
-
-  Future<void> _toggle(bool enable) async {
-    try {
-      if (enable) {
-        final supported = await widget.localAuth.isDeviceSupported();
-        final can       = await widget.localAuth.canCheckBiometrics;
-
-        if (!supported || !can) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content:  Text('Biometrics not available on this device.'),
-              behavior: SnackBarBehavior.floating,
-            ));
-          }
-          return;
-        }
-
-        final authed = await widget.localAuth.authenticate(
-          localizedReason: 'Authenticate to enable biometric lock',
-          options: const AuthenticationOptions(
-            biometricOnly: false, // allow PIN fallback too
-            stickyAuth:    true,
-            useErrorDialogs: true,
-          ),
-        );
-        if (!authed) return;
-      }
-
-      await ref.read(cacheServiceProvider).setBiometric(enable);
-      if (mounted) {
-        setState(() => _enabled = enable);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:  Text(enable ? 'Biometric lock enabled.' : 'Biometric lock disabled.'),
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:  Text('Biometric error: ${e.toString()}'),
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _SettingsTile(
-      icon:     Icons.fingerprint_rounded,
-      iconBg:   const Color(0xFF0891B2),
-      label:    'Biometric Lock',
-      subtitle: 'Use fingerprint or device PIN to open app',
-      trailing: Switch(value: _enabled, onChanged: _toggle),
-    );
-  }
-}
-
 // ── Profile Card ──────────────────────────────────────────────────────────────
 
 class _ProfileCard extends StatelessWidget {
@@ -541,11 +451,11 @@ class _StatsRow extends StatelessWidget {
           color: Theme.of(context).colorScheme.primary)),
       const SizedBox(width: 10),
       Expanded(child: _StatCard(label: 'Receive',
-          value: '₹${AppFormatters.compactCurrency(toReceive)}',
+          value: '₹${AppFormatters.currency(toReceive)}',
           icon: Icons.arrow_downward_rounded, color: AppColors.success)),
       const SizedBox(width: 10),
       Expanded(child: _StatCard(label: 'Pay',
-          value: '₹${AppFormatters.compactCurrency(toPay)}',
+          value: '₹${AppFormatters.currency(toPay)}',
           icon: Icons.arrow_upward_rounded, color: AppColors.danger)),
     ]);
   }
@@ -568,8 +478,11 @@ class _StatCard extends StatelessWidget {
       child: Column(children: [
         Icon(icon, color: color, size: 20),
         const SizedBox(height: 6),
-        Text(value, style: GoogleFonts.poppins(
-            fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(value, style: GoogleFonts.poppins(
+              fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+        ),
         Text(label, style: GoogleFonts.poppins(fontSize: 10,
             color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5))),
       ]),
@@ -684,16 +597,9 @@ class _HelpRow extends StatelessWidget {
 
 // ── FAQ Item ──────────────────────────────────────────────────────────────────
 
-class _FaqItem extends StatefulWidget {
+class _FaqItem extends StatelessWidget {
   final String q, a;
   const _FaqItem({required this.q, required this.a});
-
-  @override
-  State<_FaqItem> createState() => _FaqItemState();
-}
-
-class _FaqItemState extends State<_FaqItem> {
-  bool _open = false;
 
   @override
   Widget build(BuildContext context) {
@@ -709,12 +615,12 @@ class _FaqItemState extends State<_FaqItem> {
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          title: Text(widget.q, style: GoogleFonts.poppins(
+          title: Text(q, style: GoogleFonts.poppins(
               fontSize: 13, fontWeight: FontWeight.w600)),
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Text(widget.a, style: GoogleFonts.poppins(
+              child: Text(a, style: GoogleFonts.poppins(
                   fontSize: 13, height: 1.6,
                   color: cs.onSurface.withOpacity(0.7))),
             ),
