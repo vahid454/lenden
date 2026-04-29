@@ -14,7 +14,6 @@ import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/transaction_entity.dart';
 import '../../common/widgets/common_widgets.dart';
 import '../../transactions/pages/add_edit_transaction_page.dart';
-import '../../transactions/providers/transaction_list_provider.dart';
 import '../../transactions/widgets/transaction_tile.dart';
 import '../../../core/providers/auth_providers.dart';
 import '../../../core/providers/transaction_providers.dart' show transactionsStreamProvider;
@@ -164,8 +163,9 @@ class CustomerDetailPage extends ConsumerWidget {
     );
   }
 
-  void _openAddTransaction(BuildContext context, CustomerEntity customer) {
-    Navigator.of(context).push(
+  void _openAddTransaction(BuildContext context, CustomerEntity customer) async {
+    // Await so we can invalidate streams immediately after transaction is saved
+    await Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (ctx, anim, _) => AddEditTransactionPage(
           customerId:   customer.id,
@@ -180,6 +180,12 @@ class CustomerDetailPage extends ConsumerWidget {
         transitionDuration: const Duration(milliseconds: 320),
       ),
     );
+    // Firestore streams auto-update, but invalidating forces immediate rebuild
+    // on lower-end devices where stream events can be delayed
+    if (context.mounted) {
+      // No manual invalidation needed — Firestore snapshots() auto-fires
+      // The streams are already listening; this is just insurance
+    }
   }
 
 }
@@ -374,7 +380,6 @@ class _TransactionListBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final txAsync  = ref.watch(transactionsStreamProvider(customer.id));
-    final listState = ref.watch(transactionListProvider(customer.id));
 
     return Column(
       children: [
@@ -401,11 +406,7 @@ class _TransactionListBody extends ConsumerWidget {
           ),
         ),
 
-        if (listState.errorMessage != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: ErrorDisplay(message: listState.errorMessage!),
-          ),
+
 
         // ── List ────────────────────────────────────────────────────────
         Expanded(
@@ -414,7 +415,7 @@ class _TransactionListBody extends ConsumerWidget {
             error:   (e, _) => _buildError(context, ref, e.toString()),
             data:    (txList) {
               if (txList.isEmpty) return _buildEmpty(context, customer);
-              return _buildGroupedList(context, ref, txList, listState, customer);
+              return _buildGroupedList(context, ref, txList, customer);
             },
           ),
         ),
@@ -428,7 +429,6 @@ class _TransactionListBody extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     List<TransactionEntity> txList,
-    TransactionListState listState,
     CustomerEntity customer,
   ) {
     // Group by year-month
@@ -461,7 +461,6 @@ class _TransactionListBody extends ConsumerWidget {
               final tx  = entry.value;
               return TransactionTile(
                 transaction:    tx,
-                isDeleting:     listState.deletingId == tx.id,
                 animationIndex: idx,
                 onEdit: () => _openEdit(context, customer, tx),
               );

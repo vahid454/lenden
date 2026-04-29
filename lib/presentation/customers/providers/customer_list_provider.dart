@@ -6,9 +6,7 @@ import '../../../core/providers/auth_providers.dart';
 import '../../../core/providers/customer_providers.dart';
 import '../../../domain/entities/customer_entity.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Customer List Page State
-// ─────────────────────────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────────────────────
 
 class CustomerListState {
   final bool isSearching;
@@ -16,11 +14,11 @@ class CustomerListState {
   final bool isSearchLoading;
   final List<CustomerEntity>? searchResults;
   final String? errorMessage;
-  final String? deletingId; // ID of customer being deleted (for UI feedback)
+  final String? deletingId;
 
   const CustomerListState({
-    this.isSearching = false,
-    this.searchQuery = '',
+    this.isSearching     = false,
+    this.searchQuery     = '',
     this.isSearchLoading = false,
     this.searchResults,
     this.errorMessage,
@@ -36,24 +34,20 @@ class CustomerListState {
     List<CustomerEntity>? searchResults,
     String? errorMessage,
     String? deletingId,
-    bool clearError = false,
+    bool clearError    = false,
     bool clearDeleting = false,
-    bool clearSearch = false,
-  }) {
-    return CustomerListState(
-      isSearching: isSearching ?? this.isSearching,
-      searchQuery: searchQuery ?? this.searchQuery,
-      isSearchLoading: isSearchLoading ?? this.isSearchLoading,
-      searchResults: clearSearch ? null : searchResults ?? this.searchResults,
-      errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
-      deletingId: clearDeleting ? null : deletingId ?? this.deletingId,
-    );
-  }
+    bool clearSearch   = false,
+  }) => CustomerListState(
+    isSearching:     isSearching     ?? this.isSearching,
+    searchQuery:     searchQuery     ?? this.searchQuery,
+    isSearchLoading: isSearchLoading ?? this.isSearchLoading,
+    searchResults:   clearSearch  ? null : searchResults ?? this.searchResults,
+    errorMessage:    clearError   ? null : errorMessage  ?? this.errorMessage,
+    deletingId:      clearDeleting ? null : deletingId   ?? this.deletingId,
+  );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Notifier
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Notifier ──────────────────────────────────────────────────────────────────
 
 class CustomerListNotifier extends StateNotifier<CustomerListState> {
   final Ref _ref;
@@ -67,14 +61,10 @@ class CustomerListNotifier extends StateNotifier<CustomerListState> {
     super.dispose();
   }
 
-  // ── Search ──────────────────────────────────────────────────────────────
+  // ── Search ────────────────────────────────────────────────────────────────
 
   void onSearchChanged(String query) {
-    state = state.copyWith(
-      searchQuery: query,
-      isSearching: query.isNotEmpty,
-    );
-
+    state = state.copyWith(searchQuery: query, isSearching: query.isNotEmpty);
     _searchDebounce?.cancel();
 
     if (query.trim().isEmpty) {
@@ -82,7 +72,6 @@ class CustomerListNotifier extends StateNotifier<CustomerListState> {
       return;
     }
 
-    // Debounce 350ms to avoid hammering Firestore on each keystroke
     _searchDebounce = Timer(const Duration(milliseconds: 350), () {
       _performSearch(query.trim());
     });
@@ -90,23 +79,17 @@ class CustomerListNotifier extends StateNotifier<CustomerListState> {
 
   Future<void> _performSearch(String query) async {
     final userId = _ref.read(currentUserProvider)?.id;
-    if (userId == null) return;
+    if (userId == null || userId.isEmpty) return;
 
     state = state.copyWith(isSearchLoading: true);
 
     final useCase = _ref.read(searchCustomersUseCaseProvider);
-    final result = await useCase(userId: userId, query: query);
+    final result  = await useCase(userId: userId, query: query);
 
     result.fold(
-      (failure) => state = state.copyWith(
-        isSearchLoading: false,
-        errorMessage: failure.message,
-      ),
-      (customers) => state = state.copyWith(
-        isSearchLoading: false,
-        searchResults: customers,
-        clearError: true,
-      ),
+      (f) => state = state.copyWith(isSearchLoading: false, errorMessage: f.message),
+      (list) => state = state.copyWith(
+          isSearchLoading: false, searchResults: list, clearError: true),
     );
   }
 
@@ -115,35 +98,21 @@ class CustomerListNotifier extends StateNotifier<CustomerListState> {
     state = const CustomerListState();
   }
 
-  // ── Delete ──────────────────────────────────────────────────────────────
-
+  // ── Delete DISABLED — data safety ────────────────────────────────────────
+  // Deletion is blocked by Firestore rules and disabled in UI.
+  // This method exists for API compat but always returns false.
   Future<bool> deleteCustomer(String customerId) async {
-    state = state.copyWith(deletingId: customerId, clearError: true);
-
-    final useCase = _ref.read(deleteCustomerUseCaseProvider);
-    final result = await useCase(customerId);
-
-    return result.fold(
-      (failure) {
-        state = state.copyWith(
-          clearDeleting: true,
-          errorMessage: failure.message,
-        );
-        return false;
-      },
-      (_) {
-        state = state.copyWith(clearDeleting: true);
-        return true;
-      },
+    // Intentionally no-op — Firestore rules block delete anyway
+    state = state.copyWith(
+      errorMessage: 'Customer deletion is disabled. Contact support if needed.',
     );
+    return false;
   }
 
   void clearError() => state = state.copyWith(clearError: true);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Provider
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Provider ──────────────────────────────────────────────────────────────────
 
 final customerListProvider =
     StateNotifierProvider.autoDispose<CustomerListNotifier, CustomerListState>(

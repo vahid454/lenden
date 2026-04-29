@@ -51,7 +51,8 @@ final getTransactionsByDateRangeUseCaseProvider =
 
 // ── Stream per customer ───────────────────────────────────────────────────────
 
-final transactionsStreamProvider = StreamProvider.autoDispose
+// keepAlive so stream doesn't reset on brief navigation away
+final transactionsStreamProvider = StreamProvider
     .family<List<TransactionEntity>, String>((ref, customerId) async* {
   // Emit a quick initial value so UI does not stay on shimmer
   // while Firestore establishes the first snapshot.
