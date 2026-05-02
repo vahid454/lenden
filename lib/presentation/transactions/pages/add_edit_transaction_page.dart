@@ -11,20 +11,18 @@ import '../../../domain/entities/transaction_entity.dart';
 import '../../common/widgets/common_widgets.dart';
 import '../providers/transaction_form_provider.dart';
 
-/// Add or edit a transaction for a given customer.
-/// Slide-up modal sheet style.
 class AddEditTransactionPage extends ConsumerStatefulWidget {
-  final String              customerId;
-  final String              customerName;
-  final double              currentBalance;
-  final TransactionType?    initialType;
-  final TransactionEntity?  existingTransaction; // non-null = edit mode
+  final String             customerId;
+  final String             customerName;
+  final double             currentBalance;
+  final TransactionType?   initialType;
+  final TransactionEntity? existingTransaction;
 
   const AddEditTransactionPage({
     super.key,
     required this.customerId,
     required this.customerName,
-    this.currentBalance = 0,
+    this.currentBalance  = 0,
     this.initialType,
     this.existingTransaction,
   });
@@ -48,761 +46,563 @@ class _AddEditTransactionPageState
   @override
   void initState() {
     super.initState();
-    final e = widget.existingTransaction;
+    final e       = widget.existingTransaction;
     _type         = e?.type ?? widget.initialType ?? TransactionType.gave;
     _selectedDate = e?.date ?? DateTime.now();
-    _amountCtrl.text =
-        e != null ? (e.amount % 1 == 0 ? e.amount.toInt().toString() : e.amount.toStringAsFixed(2)) : '';
-    _noteCtrl.text = e?.note ?? '';
-    _amountCtrl.addListener(_handleAmountChanged);
+    if (e != null) {
+      _amountCtrl.text = e.amount % 1 == 0
+          ? e.amount.toInt().toString()
+          : e.amount.toStringAsFixed(2);
+      _noteCtrl.text = e.note ?? '';
+    }
+    _amountCtrl.addListener(() { if (mounted) setState(() {}); });
   }
 
   @override
   void dispose() {
-    _amountCtrl.removeListener(_handleAmountChanged);
     _amountCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
   }
 
-  void _handleAmountChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  // ── Date picker ───────────────────────────────────────────────────────────
-
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
-      context:         context,
-      initialDate:     _selectedDate,
-      firstDate:       DateTime(2000),
-      lastDate:        DateTime.now(),
-      builder:         (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: Theme.of(ctx).colorScheme.copyWith(
-            primary: Theme.of(ctx).colorScheme.primary,
-          ),
-        ),
-        child: child!,
-      ),
+      context:     context,
+      initialDate: _selectedDate,
+      firstDate:   DateTime(2000),
+      lastDate:    DateTime.now(),
     );
     if (picked != null) setState(() => _selectedDate = picked);
   }
-
-  // ── Save ──────────────────────────────────────────────────────────────────
 
   Future<void> _onSave() async {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
 
-    final amount  = double.tryParse(_amountCtrl.text.trim()) ?? 0;
-    final notifier = ref.read(
-        transactionFormProvider(widget.customerId).notifier);
+    final amount   = double.tryParse(_amountCtrl.text.trim()) ?? 0;
+    final notifier = ref.read(transactionFormProvider(widget.customerId).notifier);
 
-    TransactionEntity? savedTransaction;
+    TransactionEntity? result;
     if (widget.isEditing) {
-      savedTransaction = await notifier.updateTransaction(
+      result = await notifier.updateTransaction(
         existing: widget.existingTransaction!,
-        amount:   amount,
-        type:     _type,
-        date:     _selectedDate,
-        note:     _noteCtrl.text,
+        amount:   amount, type: _type,
+        date: _selectedDate, note: _noteCtrl.text,
       );
     } else {
-      savedTransaction = await notifier.addTransaction(
+      result = await notifier.addTransaction(
         customerId: widget.customerId,
-        amount:     amount,
-        type:       _type,
-        date:       _selectedDate,
-        note:       _noteCtrl.text,
+        amount:     amount, type: _type,
+        date: _selectedDate, note: _noteCtrl.text,
       );
     }
 
-    if (savedTransaction != null && mounted) {
+    if (result != null && mounted) {
       HapticFeedback.mediumImpact();
-      Navigator.of(context).pop(savedTransaction);
+      Navigator.of(context).pop(result);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(transactionFormProvider(widget.customerId));
-    final cs    = Theme.of(context).colorScheme;
-    final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0;
-    final currentBalance = widget.currentBalance;
+    final state   = ref.watch(transactionFormProvider(widget.customerId));
+    final cs      = Theme.of(context).colorScheme;
+    final isDark  = Theme.of(context).brightness == Brightness.dark;
+    final amount  = double.tryParse(_amountCtrl.text.trim()) ?? 0;
+    final isGave  = _type == TransactionType.gave;
+    final accent  = isGave ? AppColors.success : AppColors.danger;
+
+    // Projected balance
     final baseBalance = widget.isEditing
-        ? currentBalance - (widget.existingTransaction?.balanceDelta ?? 0)
-        : currentBalance;
-    final projectedBalance =
-        baseBalance + (_type == TransactionType.gave ? amount : -amount);
+        ? widget.currentBalance - (widget.existingTransaction?.balanceDelta ?? 0)
+        : widget.currentBalance;
+    final projected = baseBalance + (isGave ? amount : -amount);
 
     return KeyboardDismissWrapper(
       child: Scaffold(
-        // Drag handle at top for bottom-sheet feel
-        appBar: AppBar(
-          leading: IconButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            icon: const Icon(Icons.close_rounded),
-          ),
-          title: Text(
-            widget.isEditing ? 'Edit Entry' : 'Add Entry',
-            style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700),
-          ),
-          actions: [
-            TextButton(
-              onPressed: state.isLoading ? null : _onSave,
-              child: Text(
-                'Save',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700,
-                  fontSize:   15,
-                  color: state.isLoading
-                      ? cs.onSurface.withOpacity(0.3)
-                      : cs.primary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-
+        backgroundColor: isDark ? AppColors.darkBackground : const Color(0xFFF8F9FA),
         body: LoadingOverlay(
           isLoading: state.isLoading,
-          message:   widget.isEditing ? 'Updating entry…' : 'Saving entry…',
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Customer banner ────────────────────────────────────
-                  _CustomerBanner(
-                    name: widget.customerName,
-                    currentBalance: currentBalance,
-                  )
-                      .animate().fadeIn(),
-
-                  const SizedBox(height: 16),
-
-                  _BalancePreviewCard(
-                    currentBalance: currentBalance,
-                    projectedBalance: projectedBalance,
-                    selectedType: _type,
-                    isEditing: widget.isEditing,
-                    amount: amount,
-                  ).animate().fadeIn(delay: 40.ms),
-
-                  const SizedBox(height: 24),
-
-                  // ── Type toggle ────────────────────────────────────────
-                  _TypeToggle(
-                    selected:  _type,
-                    onChanged: (t) => setState(() => _type = t),
-                  ).animate().fadeIn(delay: 80.ms),
-
-                  const SizedBox(height: 24),
-
-                  // ── Amount ─────────────────────────────────────────────
-                  _AmountField(
-                    controller: _amountCtrl,
-                    type:       _type,
-                  ).animate().fadeIn(delay: 120.ms),
-
-                  const SizedBox(height: 20),
-
-                  // ── Date picker ────────────────────────────────────────
-                  _DateRow(
-                    date:     _selectedDate,
-                    onTap:    _pickDate,
-                  ).animate().fadeIn(delay: 160.ms),
-
-                  const SizedBox(height: 20),
-
-                  // ── Note ───────────────────────────────────────────────
-                  TextFormField(
-                    controller:      _noteCtrl,
-                    maxLines:        2,
-                    maxLength:       150,
-                    textInputAction: TextInputAction.done,
-                    onEditingComplete: _onSave,
-                    style: GoogleFonts.poppins(fontSize: 14),
-                    decoration: InputDecoration(
-                      labelText: 'Note (optional)',
-                      hintText:  'e.g. For groceries, Loan payment…',
-                      prefixIcon: const Padding(
-                        padding: EdgeInsets.only(bottom: 24),
-                        child: Icon(Icons.notes_rounded, size: 20),
-                      ),
-                      alignLabelWithHint: true,
-                    ),
-                  ).animate().fadeIn(delay: 200.ms),
-
-                  const SizedBox(height: 8),
-
-                  // ── Error ──────────────────────────────────────────────
-                  if (state.errorMessage != null)
-                    ErrorDisplay(message: state.errorMessage!)
-                        .animate().fadeIn().shakeX(amount: 4),
-
-                  const SizedBox(height: 28),
-
-                  // ── Save button ────────────────────────────────────────
-                  _SaveButton(
-                    type:      _type,
-                    isEditing: widget.isEditing,
-                    isLoading: state.isLoading,
-                    onPressed: _onSave,
-                  ).animate().fadeIn(delay: 240.ms).slideY(begin: 0.15),
-
-                  const SizedBox(height: 32),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Customer Banner ───────────────────────────────────────────────────────────
-
-class _CustomerBanner extends StatelessWidget {
-  final String name;
-  final double currentBalance;
-  const _CustomerBanner({
-    required this.name,
-    required this.currentBalance,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs     = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding:    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color:        isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.border,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.person_outline_rounded,
-              size: 18, color: cs.primary),
-          const SizedBox(width: 10),
-          Text(
-            'Transaction with ',
-            style: GoogleFonts.poppins(fontSize: 13, color: cs.onSurface.withOpacity(0.6)),
-          ),
-          Text(
-            name,
-            style: GoogleFonts.poppins(
-                fontSize: 13, fontWeight: FontWeight.w700),
-          ),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: cs.primary.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              _headlineBalance(currentBalance),
-              style: GoogleFonts.poppins(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: cs.primary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _headlineBalance(double balance) {
-    if (balance == 0) return 'Settled';
-    final label = balance > 0 ? 'To receive' : 'To pay';
-    return '$label ${AppFormatters.rupee(balance.abs())}';
-  }
-}
-
-class _BalancePreviewCard extends StatelessWidget {
-  final double currentBalance;
-  final double projectedBalance;
-  final TransactionType selectedType;
-  final bool isEditing;
-  final double amount;
-
-  const _BalancePreviewCard({
-    required this.currentBalance,
-    required this.projectedBalance,
-    required this.selectedType,
-    required this.isEditing,
-    required this.amount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final accent =
-        selectedType == TransactionType.gave ? AppColors.success : AppColors.danger;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            accent.withOpacity(0.12),
-            cs.surface,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accent.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  selectedType == TransactionType.gave
-                      ? Icons.arrow_upward_rounded
-                      : Icons.arrow_downward_rounded,
-                  color: accent,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      selectedType == TransactionType.gave ? 'You Gave' : 'You Got',
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      amount > 0
-                          ? _changeSummary()
-                          : 'Enter amount to preview the updated payable balance.',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: cs.onSurface.withOpacity(0.6),
-                        height: 1.4,
+          message:   widget.isEditing ? 'Updating…' : 'Saving…',
+          child: Form(
+            key: _formKey,
+            child: CustomScrollView(
+              slivers: [
+                // ── Compact header ──────────────────────────────────────
+                SliverAppBar(
+                  pinned:          true,
+                  backgroundColor: isDark ? AppColors.darkSurface : AppColors.surface,
+                  surfaceTintColor: Colors.transparent,
+                  elevation: 0,
+                  leading: IconButton(
+                    onPressed: () => Navigator.of(context).pop(null),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                  title: Text(
+                    widget.isEditing ? 'Edit Entry' : 'New Entry',
+                    style: GoogleFonts.poppins(
+                        fontSize: 17, fontWeight: FontWeight.w700),
+                  ),
+                  actions: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: FilledButton(
+                        onPressed: state.isLoading ? null : _onSave,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: accent,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: state.isLoading
+                            ? const SizedBox(width: 16, height: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
+                            : Text('Save',
+                                style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14, color: Colors.white)),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _PreviewAmount(
-                  label: 'Current balance',
-                  value: _balanceLabel(currentBalance),
-                  color: _balanceColor(currentBalance),
+
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+
+                        // ── Who + current balance ──────────────────────
+                        _PartyRow(
+                          name:    widget.customerName,
+                          balance: widget.currentBalance,
+                          isDark:  isDark,
+                        ).animate().fadeIn(),
+
+                        const SizedBox(height: 20),
+
+                        // ── Type selector (segmented) ──────────────────
+                        _SegmentedTypeSelector(
+                          selected:  _type,
+                          onChanged: (t) => setState(() => _type = t),
+                        ).animate().fadeIn(delay: 60.ms),
+
+                        const SizedBox(height: 20),
+
+                        // ── Amount input ───────────────────────────────
+                        _BigAmountField(
+                          controller: _amountCtrl,
+                          accent:     accent,
+                        ).animate().fadeIn(delay: 100.ms),
+
+                        // ── Balance preview ────────────────────────────
+                        if (amount > 0) ...[
+                          const SizedBox(height: 14),
+                          _BalanceArrow(
+                            current:   widget.currentBalance,
+                            projected: projected,
+                            accent:    accent,
+                          ).animate().fadeIn(duration: 200.ms),
+                        ],
+
+                        const SizedBox(height: 20),
+
+                        // ── Date chip ──────────────────────────────────
+                        _DateChip(date: _selectedDate, onTap: _pickDate)
+                            .animate().fadeIn(delay: 130.ms),
+
+                        const SizedBox(height: 14),
+
+                        // ── Note field ─────────────────────────────────
+                        _NoteField(controller: _noteCtrl)
+                            .animate().fadeIn(delay: 160.ms),
+
+                        // ── Error ──────────────────────────────────────
+                        if (state.errorMessage != null) ...[
+                          const SizedBox(height: 14),
+                          ErrorDisplay(message: state.errorMessage!)
+                              .animate().fadeIn().shakeX(amount: 4),
+                        ],
+
+                        const SizedBox(height: 28),
+
+                        // ── Save button ────────────────────────────────
+                        _ConfirmButton(
+                          type:      _type,
+                          isEditing: widget.isEditing,
+                          isLoading: state.isLoading,
+                          onPressed: _onSave,
+                        ).animate().fadeIn(delay: 180.ms),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _PreviewAmount(
-                  label: isEditing ? 'Updated balance' : 'After this entry',
-                  value: _balanceLabel(projectedBalance),
-                  color: _balanceColor(projectedBalance),
-                  highlight: true,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
-
-  String _changeSummary() {
-    final amountLabel = AppFormatters.rupee(amount);
-    if (selectedType == TransactionType.gave) {
-      return 'This will increase receivable by $amountLabel.';
-    }
-    return 'This will reduce receivable by $amountLabel.';
-  }
-
-  String _balanceLabel(double balance) {
-    if (balance == 0) return 'Settled';
-    final prefix = balance > 0 ? 'To receive' : 'To pay';
-    return '$prefix ${AppFormatters.rupee(balance.abs())}';
-  }
-
-  Color _balanceColor(double balance) {
-    if (balance == 0) return Colors.grey.shade700;
-    return balance > 0 ? AppColors.success : AppColors.danger;
-  }
 }
 
-class _PreviewAmount extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  final bool highlight;
+// ── Party Row ─────────────────────────────────────────────────────────────────
 
-  const _PreviewAmount({
-    required this.label,
-    required this.value,
-    required this.color,
-    this.highlight = false,
-  });
+class _PartyRow extends StatelessWidget {
+  final String name;
+  final double balance;
+  final bool   isDark;
+  const _PartyRow({required this.name, required this.balance, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: highlight ? color.withOpacity(0.08) : cs.surface.withOpacity(0.65),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: highlight ? color.withOpacity(0.18) : cs.outline.withOpacity(0.08),
+        color:        isDark ? AppColors.darkSurface : AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
+      ),
+      child: Row(children: [
+        CircleAvatar(
+          radius: 20,
+          backgroundColor: cs.primary.withOpacity(0.1),
+          child: Text(
+            name.isNotEmpty ? name[0].toUpperCase() : '?',
+            style: GoogleFonts.poppins(
+                fontSize: 16, fontWeight: FontWeight.w700, color: cs.primary),
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(name, style: GoogleFonts.poppins(
+              fontSize: 14, fontWeight: FontWeight.w600)),
           Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: cs.onSurface.withOpacity(0.52),
-            ),
+            balance == 0 ? 'Settled' :
+            balance > 0  ? 'Owes you ${AppFormatters.rupee(balance)}' :
+                           'You owe ${AppFormatters.rupee(balance.abs())}',
+            style: GoogleFonts.poppins(fontSize: 12,
+                color: balance > 0 ? AppColors.success :
+                       balance < 0 ? AppColors.danger :
+                       cs.onSurface.withOpacity(0.45)),
           ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
-          ),
-        ],
-      ),
+        ])),
+      ]),
     );
   }
 }
 
-// ── Type Toggle ───────────────────────────────────────────────────────────────
+// ── Segmented type selector ───────────────────────────────────────────────────
 
-class _TypeToggle extends StatelessWidget {
+class _SegmentedTypeSelector extends StatelessWidget {
   final TransactionType selected;
   final ValueChanged<TransactionType> onChanged;
-
-  const _TypeToggle({required this.selected, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'TRANSACTION TYPE',
-          style: GoogleFonts.poppins(
-            fontSize:      11,
-            fontWeight:    FontWeight.w700,
-            color:         Theme.of(context).colorScheme.onSurface.withOpacity(0.45),
-            letterSpacing: 1.2,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _TypeBtn(
-                label:    'You Gave',
-                subtitle: 'They owe you',
-                icon:     Icons.arrow_upward_rounded,
-                color:    AppColors.success,
-                bgColor:  AppColors.successLight,
-                selected: selected == TransactionType.gave,
-                onTap:    () => onChanged(TransactionType.gave),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _TypeBtn(
-                label:    'You Got',
-                subtitle: 'You received',
-                icon:     Icons.arrow_downward_rounded,
-                color:    AppColors.danger,
-                bgColor:  AppColors.dangerLight,
-                selected: selected == TransactionType.got,
-                onTap:    () => onChanged(TransactionType.got),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _TypeBtn extends StatelessWidget {
-  final String   label;
-  final String   subtitle;
-  final IconData icon;
-  final Color    color;
-  final Color    bgColor;
-  final bool     selected;
-  final VoidCallback onTap;
-
-  const _TypeBtn({
-    required this.label,
-    required this.subtitle,
-    required this.icon,
-    required this.color,
-    required this.bgColor,
-    required this.selected,
-    required this.onTap,
-  });
+  const _SegmentedTypeSelector({required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding:    const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        decoration: BoxDecoration(
-          color:        selected
-              ? (isDark ? color.withOpacity(0.2) : bgColor)
-              : Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected ? color : (isDark ? AppColors.darkBorder : AppColors.border),
-            width: selected ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding:    const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color:        selected ? color.withOpacity(0.15) : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: selected ? color : Theme.of(context).colorScheme.onSurface.withOpacity(0.4), size: 22),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize:   13,
-                fontWeight: FontWeight.w700,
-                color:      selected ? color : Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
-            Text(
-              subtitle,
-              style: GoogleFonts.poppins(
-                fontSize: 10,
-                color:    selected ? color.withOpacity(0.7) : Theme.of(context).colorScheme.onSurface.withOpacity(0.35),
-              ),
-            ),
-          ],
-        ),
+    return Container(
+      height: 52,
+      decoration: BoxDecoration(
+        color:        isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
       ),
+      child: Row(children: [
+        Expanded(child: _Seg(
+          label:    'You Gave',
+          icon:     Icons.arrow_upward_rounded,
+          color:    AppColors.success,
+          selected: selected == TransactionType.gave,
+          onTap:    () => onChanged(TransactionType.gave),
+        )),
+        Container(width: 1, height: 28,
+            color: isDark ? AppColors.darkBorder : AppColors.border),
+        Expanded(child: _Seg(
+          label:    'You Got',
+          icon:     Icons.arrow_downward_rounded,
+          color:    AppColors.danger,
+          selected: selected == TransactionType.got,
+          onTap:    () => onChanged(TransactionType.got),
+        )),
+      ]),
     );
   }
 }
 
-// ── Amount Field ──────────────────────────────────────────────────────────────
-
-class _AmountField extends StatelessWidget {
-  final TextEditingController controller;
-  final TransactionType       type;
-
-  const _AmountField({required this.controller, required this.type});
+class _Seg extends StatelessWidget {
+  final String label; final IconData icon;
+  final Color color; final bool selected; final VoidCallback onTap;
+  const _Seg({required this.label, required this.icon, required this.color,
+    required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final color = type == TransactionType.gave ? AppColors.success : AppColors.danger;
-
-    return TextFormField(
-      controller:   controller,
-      autofocus:    true,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      textInputAction: TextInputAction.next,
-      style: GoogleFonts.poppins(
-        fontSize:   28,
-        fontWeight: FontWeight.w700,
-        color:      color,
-      ),
-      inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-      ],
-      validator: (v) {
-        if (v == null || v.isEmpty) return 'Enter an amount';
-        final val = double.tryParse(v);
-        if (val == null || val <= 0) return 'Enter a valid amount';
-        if (val > 10000000) return 'Amount too large (max ₹1 Crore)';
-        return null;
-      },
-      decoration: InputDecoration(
-        labelText: 'Amount',
-        prefixIcon: Padding(
-          padding: const EdgeInsets.only(left: 16, right: 8, top: 4),
-          child: Text(
-            '₹',
-            style: GoogleFonts.poppins(
-              fontSize:   28,
-              fontWeight: FontWeight.w700,
-              color:      color,
-            ),
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        margin: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color:        selected ? color : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
         ),
-        prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-        hintText: '0',
-        hintStyle: GoogleFonts.poppins(
-          fontSize:   28,
-          fontWeight: FontWeight.w700,
-          color:      color.withOpacity(0.25),
-        ),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon,
+              size:  16,
+              color: selected ? Colors.white : color.withOpacity(0.6)),
+          const SizedBox(width: 6),
+          Text(label,
+              style: GoogleFonts.poppins(
+                  fontSize:   13,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : color.withOpacity(0.7))),
+        ]),
       ),
     );
   }
 }
 
-// ── Date Row ──────────────────────────────────────────────────────────────────
+// ── Big amount field ──────────────────────────────────────────────────────────
 
-class _DateRow extends StatelessWidget {
-  final DateTime  date;
+class _BigAmountField extends StatelessWidget {
+  final TextEditingController controller;
+  final Color accent;
+  const _BigAmountField({required this.controller, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color:        isDark ? AppColors.darkSurface : AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accent.withOpacity(0.35), width: 1.5),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Text('₹', style: GoogleFonts.poppins(
+            fontSize: 32, fontWeight: FontWeight.w700, color: accent)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextFormField(
+            controller:      controller,
+            autofocus:       true,
+            keyboardType:    const TextInputType.numberWithOptions(decimal: true),
+            textInputAction: TextInputAction.next,
+            style: GoogleFonts.poppins(
+                fontSize: 32, fontWeight: FontWeight.w700, color: accent),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+            ],
+            validator: (v) {
+              if (v == null || v.isEmpty) return 'Enter amount';
+              final val = double.tryParse(v);
+              if (val == null || val <= 0) return 'Invalid amount';
+              if (val > 10000000) return 'Max ₹1 Crore';
+              return null;
+            },
+            decoration: InputDecoration(
+              hintText:  '0',
+              hintStyle: GoogleFonts.poppins(
+                  fontSize: 32, fontWeight: FontWeight.w700,
+                  color: accent.withOpacity(0.2)),
+              border:        InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              errorBorder:   InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ── Balance arrow ─────────────────────────────────────────────────────────────
+
+class _BalanceArrow extends StatelessWidget {
+  final double current, projected;
+  final Color accent;
+  const _BalanceArrow({required this.current, required this.projected,
+    required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs     = Theme.of(context).colorScheme;
+
+    String _lbl(double v) {
+      if (v == 0) return 'Settled';
+      return v > 0
+          ? '${AppFormatters.rupee(v)} to receive'
+          : '${AppFormatters.rupee(v.abs())} to pay';
+    }
+
+    Color _col(double v) => v > 0
+        ? AppColors.success : v < 0 ? AppColors.danger : Colors.grey;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:        isDark ? AppColors.darkSurface : AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
+      ),
+      child: Row(children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Before', style: GoogleFonts.poppins(
+              fontSize: 10, color: cs.onSurface.withOpacity(0.45),
+              fontWeight: FontWeight.w600)),
+          const SizedBox(height: 3),
+          Text(_lbl(current), style: GoogleFonts.poppins(
+              fontSize: 12, fontWeight: FontWeight.w600,
+              color: _col(current))),
+        ])),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Icon(Icons.arrow_forward_rounded,
+              size: 18, color: accent.withOpacity(0.7)),
+        ),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text('After', style: GoogleFonts.poppins(
+              fontSize: 10, color: cs.onSurface.withOpacity(0.45),
+              fontWeight: FontWeight.w600)),
+          const SizedBox(height: 3),
+          Text(_lbl(projected), style: GoogleFonts.poppins(
+              fontSize: 12, fontWeight: FontWeight.w700,
+              color: _col(projected))),
+        ])),
+      ]),
+    );
+  }
+}
+
+// ── Date chip ─────────────────────────────────────────────────────────────────
+
+class _DateChip extends StatelessWidget {
+  final DateTime date;
   final VoidCallback onTap;
+  const _DateChip({required this.date, required this.onTap});
 
-  const _DateRow({required this.date, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    final cs     = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final now    = DateTime.now();
+    final today  = DateTime(now.year, now.month, now.day);
+    final d      = DateTime(date.year, date.month, date.day);
+    final label  = d == today ? 'Today'
+        : d == today.subtract(const Duration(days: 1)) ? 'Yesterday'
+        : DateFormat('d MMM yyyy').format(date);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color:        isDark ? AppColors.darkSurface : AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
+        ),
+        child: Row(children: [
+          Icon(Icons.event_rounded, size: 18, color: cs.primary),
+          const SizedBox(width: 10),
+          Text(label, style: GoogleFonts.poppins(
+              fontSize: 14, fontWeight: FontWeight.w500)),
+          const Spacer(),
+          Icon(Icons.chevron_right_rounded,
+              size: 18, color: cs.onSurface.withOpacity(0.35)),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── Note field ────────────────────────────────────────────────────────────────
+
+class _NoteField extends StatelessWidget {
+  final TextEditingController controller;
+  const _NoteField({required this.controller});
 
   @override
   Widget build(BuildContext context) {
     final cs     = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding:    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color:        isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isDark ? AppColors.darkBorder : AppColors.border,
+    return Container(
+      decoration: BoxDecoration(
+        color:        isDark ? AppColors.darkSurface : AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
+      ),
+      child: TextField(
+        controller:      controller,
+        maxLines:        2,
+        maxLength:       120,
+        textInputAction: TextInputAction.done,
+        style: GoogleFonts.poppins(fontSize: 14),
+        decoration: InputDecoration(
+          counterText: '',
+          hintText:    'Add a note… (optional)',
+          hintStyle: GoogleFonts.poppins(
+              fontSize: 13, color: cs.onSurface.withOpacity(0.35)),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: Icon(Icons.sticky_note_2_outlined,
+                size: 18, color: cs.onSurface.withOpacity(0.4)),
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.calendar_today_outlined, size: 20, color: cs.primary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                _label(date),
-                style: GoogleFonts.poppins(
-                  fontSize:   14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            Icon(Icons.chevron_right_rounded,
-                size: 20, color: cs.onSurface.withOpacity(0.35)),
-          ],
+          alignLabelWithHint: true,
+          border:        InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16, vertical: 14),
         ),
       ),
     );
   }
-
-  String _label(DateTime d) {
-    final now   = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final day   = DateTime(d.year, d.month, d.day);
-    if (day == today) return 'Today — ${DateFormat('d MMM yyyy').format(d)}';
-    if (day == today.subtract(const Duration(days: 1)))
-      return 'Yesterday — ${DateFormat('d MMM yyyy').format(d)}';
-    return DateFormat('EEEE, d MMMM yyyy').format(d);
-  }
 }
 
-// ── Save Button ───────────────────────────────────────────────────────────────
+// ── Confirm button ────────────────────────────────────────────────────────────
 
-class _SaveButton extends StatelessWidget {
+class _ConfirmButton extends StatelessWidget {
   final TransactionType type;
-  final bool            isEditing;
-  final bool            isLoading;
-  final VoidCallback    onPressed;
-
-  const _SaveButton({
-    required this.type,
-    required this.isEditing,
-    required this.isLoading,
-    required this.onPressed,
-  });
+  final bool isEditing, isLoading;
+  final VoidCallback onPressed;
+  const _ConfirmButton({required this.type, required this.isEditing,
+    required this.isLoading, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
     final isGave = type == TransactionType.gave;
     final color  = isGave ? AppColors.success : AppColors.danger;
-    final label  = isEditing
-        ? 'Update Entry'
+    final label  = isEditing ? 'Update Entry'
         : isGave ? 'Confirm — You Gave' : 'Confirm — You Got';
-    final icon   = isGave
-        ? Icons.arrow_upward_rounded
-        : Icons.arrow_downward_rounded;
 
     return SizedBox(
-      width:  double.infinity,
-      height: 54,
+      width: double.infinity, height: 54,
       child: ElevatedButton.icon(
         onPressed: isLoading ? null : onPressed,
-        icon:  isLoading
-            ? const SizedBox(
-                width: 20, height: 20,
+        icon: isLoading
+            ? const SizedBox(width: 18, height: 18,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation(Colors.white),
-                ),
-              )
-            : Icon(icon, size: 20),
-        label: Text(
-          label,
-          style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700),
-        ),
+                    strokeWidth: 2.5, color: Colors.white))
+            : Icon(isGave ? Icons.arrow_upward_rounded
+                : Icons.arrow_downward_rounded, size: 18),
+        label: Text(label, style: GoogleFonts.poppins(
+            fontSize: 15, fontWeight: FontWeight.w700)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.white,
+          backgroundColor: color, foregroundColor: Colors.white,
+          elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+              borderRadius: BorderRadius.circular(16)),
         ),
       ),
     );
