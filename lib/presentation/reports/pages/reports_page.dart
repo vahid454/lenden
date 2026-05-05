@@ -17,37 +17,56 @@ import '../../../domain/entities/transaction_entity.dart';
 import '../../common/widgets/common_widgets.dart';
 import '../providers/reports_provider.dart';
 
-class ReportsPage extends ConsumerStatefulWidget {
+class ReportsPage extends ConsumerWidget {
   const ReportsPage({super.key});
 
   @override
-  ConsumerState<ReportsPage> createState() => _ReportsPageState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state  = ref.watch(reportsProvider);
+    final cs     = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-class _ReportsPageState extends ConsumerState<ReportsPage>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabCtrl = TabController(length: 2, vsync: this);
+    return Scaffold(
+      backgroundColor: isDark ? AppColors.darkBackground : const Color(0xFFF8F9FA),
+      appBar: AppBar(
+        backgroundColor: isDark ? AppColors.darkSurface : AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Reports',
+            style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700)),
+        actions: [
+          if (!state.isLoading)
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, size: 22),
+              onPressed: () => ref.read(reportsProvider.notifier).refresh(),
+            ),
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 22),
+            tooltip: 'Export PDF',
+            onPressed: state.isLoading ? null : () => _exportPdf(context, ref, state),
+          ),
+          const SizedBox(width: 4),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(52),
+          child: _PeriodChips(),
+        ),
+      ),
+      body: state.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : state.transactions.isEmpty
+              ? _EmptyState()
+              : _ReportBody(state: state),
+    );
   }
 
-  @override
-  void dispose() {
-    _tabCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _exportPdf() async {
-    final state     = ref.read(reportsProvider);
+  Future<void> _exportPdf(BuildContext ctx, WidgetRef ref, ReportsState state) async {
     final user      = ref.read(currentUserProvider);
     final customers = ref.read(customersStreamProvider).valueOrNull ?? [];
     final service   = ref.read(pdfExportServiceProvider);
     if (user == null) return;
 
-    final snack = ScaffoldMessenger.of(context);
+    final snack = ScaffoldMessenger.of(ctx);
     snack.showSnackBar(const SnackBar(
         content: Text('Generating PDF…'), behavior: SnackBarBehavior.floating));
     try {
@@ -60,7 +79,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage>
         to:           state.dateRange.to,
       );
       snack.hideCurrentSnackBar();
-      if (mounted) await ShareService.sharePdf(file, 'Report');
+      if (ctx.mounted) await ShareService.sharePdf(file, 'Report');
     } catch (e) {
       snack.hideCurrentSnackBar();
       snack.showSnackBar(SnackBar(
@@ -70,80 +89,9 @@ class _ReportsPageState extends ConsumerState<ReportsPage>
       ));
     }
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final state  = ref.watch(reportsProvider);
-    final cs     = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBackground : const Color(0xFFF8F9FA),
-      body: NestedScrollView(
-        headerSliverBuilder: (_, __) => [
-          SliverAppBar(
-            pinned: true,
-            floating: true,
-            backgroundColor: isDark ? AppColors.darkSurface : AppColors.surface,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            title: Text('Reports',
-                style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700)),
-            actions: [
-              if (!state.isLoading)
-                IconButton(
-                  icon: const Icon(Icons.refresh_rounded, size: 22),
-                  onPressed: () => ref.read(reportsProvider.notifier).refresh(),
-                ),
-              IconButton(
-                icon: const Icon(Icons.picture_as_pdf_outlined, size: 22),
-                tooltip: 'Export PDF',
-                onPressed: state.isLoading ? null : _exportPdf,
-              ),
-              const SizedBox(width: 4),
-            ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(96),
-              child: Column(children: [
-                // Period chips
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: _PeriodChips(),
-                ),
-                // Tab bar
-                TabBar(
-                  controller: _tabCtrl,
-                  indicatorColor: cs.primary,
-                  indicatorWeight: 2.5,
-                  labelColor: cs.primary,
-                  unselectedLabelColor: cs.onSurface.withOpacity(0.45),
-                  labelStyle: GoogleFonts.poppins(
-                      fontSize: 13, fontWeight: FontWeight.w600),
-                  unselectedLabelStyle: GoogleFonts.poppins(fontSize: 13),
-                  tabs: const [
-                    Tab(text: 'Overview'),
-                    Tab(text: 'Transactions'),
-                  ],
-                ),
-              ]),
-            ),
-          ),
-        ],
-        body: state.isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : TabBarView(
-                controller: _tabCtrl,
-                children: [
-                  _OverviewTab(state: state),
-                  _TransactionsTab(state: state),
-                ],
-              ),
-      ),
-    );
-  }
 }
 
-// ── Period chips ──────────────────────────────────────────────────────────────
+// ── Period Chips ──────────────────────────────────────────────────────────────
 
 class _PeriodChips extends ConsumerWidget {
   @override
@@ -153,36 +101,32 @@ class _PeriodChips extends ConsumerWidget {
     final cs       = Theme.of(context).colorScheme;
 
     return SizedBox(
-      height: 34,
+      height: 44,
       child: ListView(
         scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
         children: ReportPeriod.values.map((p) {
           final active = p == selected;
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: GestureDetector(
-              onTap: () {
-                if (p == ReportPeriod.custom) {
-                  _pickCustom(context, ref);
-                } else {
-                  notifier.setPeriod(p);
-                }
-              },
+              onTap: () => p == ReportPeriod.custom
+                  ? _pickCustom(context, ref)
+                  : notifier.setPeriod(p),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                 decoration: BoxDecoration(
-                  color: active ? cs.primary : cs.surface,
+                  color:        active ? cs.primary : cs.surface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: active ? cs.primary : AppColors.border,
-                  ),
+                      color: active ? cs.primary : AppColors.border),
                 ),
                 child: Text(p.label,
                     style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: active ? Colors.white : cs.onSurface.withOpacity(0.6))),
+                        fontSize: 12, fontWeight: FontWeight.w600,
+                        color: active ? Colors.white
+                            : cs.onSurface.withOpacity(0.6))),
               ),
             ),
           );
@@ -191,143 +135,160 @@ class _PeriodChips extends ConsumerWidget {
     );
   }
 
-  Future<void> _pickCustom(BuildContext context, WidgetRef ref) async {
+  Future<void> _pickCustom(BuildContext ctx, WidgetRef ref) async {
     final range = await showDateRangePicker(
-      context:   context,
-      firstDate: DateTime(2020),
-      lastDate:  DateTime.now(),
-    );
+        context: ctx, firstDate: DateTime(2020), lastDate: DateTime.now());
     if (range != null) {
-      ref.read(reportsProvider.notifier).setCustomRange(
-        DateRange(range.start, range.end),
-      );
+      ref.read(reportsProvider.notifier)
+          .setCustomRange(DateRange(range.start, range.end));
     }
   }
 }
 
-// ── Overview Tab ──────────────────────────────────────────────────────────────
+// ── Report Body ───────────────────────────────────────────────────────────────
 
-class _OverviewTab extends StatelessWidget {
+class _ReportBody extends StatelessWidget {
   final ReportsState state;
-  const _OverviewTab({required this.state});
+  const _ReportBody({required this.state});
 
   @override
   Widget build(BuildContext context) {
-    if (state.transactions.isEmpty) return _EmptyReport();
-
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Summary cards
-        _SummaryCards(state: state).animate().fadeIn(delay: 50.ms),
+        // 1. Summary hero
+        _SummaryHero(state: state).animate().fadeIn(delay: 40.ms),
+        const SizedBox(height: 12),
+
+        // 2. Gave / Got cards
+        _GaveGotRow(state: state).animate().fadeIn(delay: 80.ms),
         const SizedBox(height: 20),
 
-        // Insights
-        _InsightsRow(state: state).animate().fadeIn(delay: 100.ms),
-        const SizedBox(height: 20),
-
-        // Chart
-        if (state.monthlyBreakdown.isNotEmpty) ...[
-          _SectionLabel(label: 'Monthly Overview'),
-          const SizedBox(height: 12),
-          _BarChartCard(state: state).animate().fadeIn(delay: 140.ms),
+        // 3. Bar chart (only if >1 month of data)
+        if (state.monthlyBreakdown.length > 1) ...[
+          _Label('Monthly Breakdown'),
+          const SizedBox(height: 10),
+          _BarChartCard(state: state).animate().fadeIn(delay: 120.ms),
           const SizedBox(height: 20),
         ],
 
-        // Top customers
-        _SectionLabel(label: 'Top Balances'),
-        const SizedBox(height: 12),
-        _TopCustomers().animate().fadeIn(delay: 180.ms),
+        // 4. Transaction list grouped by date
+        _Label('All Transactions (${state.txCount})'),
+        const SizedBox(height: 10),
+        _GroupedTxList(state: state).animate().fadeIn(delay: 160.ms),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
       ],
     );
   }
 }
 
-// ── Summary Cards ─────────────────────────────────────────────────────────────
+// ── Summary Hero ──────────────────────────────────────────────────────────────
 
-class _SummaryCards extends StatelessWidget {
+class _SummaryHero extends StatelessWidget {
   final ReportsState state;
-  const _SummaryCards({required this.state});
+  const _SummaryHero({required this.state});
 
   @override
   Widget build(BuildContext context) {
-    final cs     = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final net    = state.netBalance;
+    final cs  = Theme.of(context).colorScheme;
+    final net = state.netBalance;
 
-    return Column(children: [
-      // Net hero
-      Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [cs.primary, cs.primary.withOpacity(0.72)],
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [BoxShadow(
-              color: cs.primary.withOpacity(0.28),
-              blurRadius: 20, offset: const Offset(0, 8))],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [cs.primary, cs.primary.withOpacity(0.72)],
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Text('Net Position', style: GoogleFonts.poppins(
-                fontSize: 13, color: Colors.white70)),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text('${state.txCount} transactions',
-                  style: GoogleFonts.poppins(fontSize: 11, color: Colors.white,
-                      fontWeight: FontWeight.w600)),
-            ),
-          ]),
-          const SizedBox(height: 6),
-          Text(AppFormatters.rupee(net.abs()),
-              style: GoogleFonts.poppins(fontSize: 34, fontWeight: FontWeight.w800,
-                  color: Colors.white, height: 1)),
-          const SizedBox(height: 4),
-          Text(net == 0 ? 'All settled this period' :
-               net > 0  ? 'Overall you will receive' : 'Overall you will pay',
-              style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70)),
-        ]),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(
+            color: cs.primary.withOpacity(0.28),
+            blurRadius: 20, offset: const Offset(0, 8))],
       ),
-
-      const SizedBox(height: 12),
-
-      Row(children: [
-        Expanded(child: _MiniCard(
-          label: 'Total Gave',  amount: state.totalGave,
-          color: AppColors.success, bg: AppColors.successLight,
-          icon: Icons.arrow_upward_rounded,
-        )),
-        const SizedBox(width: 12),
-        Expanded(child: _MiniCard(
-          label: 'Total Got',   amount: state.totalGot,
-          color: AppColors.danger,  bg: AppColors.dangerLight,
-          icon: Icons.arrow_downward_rounded,
-        )),
+      child: Row(children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Net Balance', style: GoogleFonts.poppins(
+              fontSize: 12, color: Colors.white70)),
+          const SizedBox(height: 4),
+          Text(AppFormatters.rupee(net.abs()),
+              style: GoogleFonts.poppins(fontSize: 30,
+                  fontWeight: FontWeight.w800, color: Colors.white, height: 1)),
+          const SizedBox(height: 4),
+          Text(
+            net == 0 ? 'All settled' :
+            net >  0 ? 'Overall to receive' : 'Overall to pay',
+            style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
+          ),
+        ])),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text('${state.txCount} entries',
+              style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70)),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(12)),
+            child: Text(
+              state.dateRange.from.year == state.dateRange.to.year &&
+              state.dateRange.from.month == state.dateRange.to.month
+                  ? DateFormat('MMM yyyy').format(state.dateRange.from)
+                  : '${DateFormat('d MMM').format(state.dateRange.from)} – '
+                    '${DateFormat('d MMM').format(state.dateRange.to)}',
+              style: GoogleFonts.poppins(fontSize: 11,
+                  color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ]),
       ]),
+    );
+  }
+}
+
+// ── Gave / Got row ────────────────────────────────────────────────────────────
+
+class _GaveGotRow extends StatelessWidget {
+  final ReportsState state;
+  const _GaveGotRow({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs     = Theme.of(context).colorScheme;
+
+    return Row(children: [
+      Expanded(child: _StatCard(
+        label:   'Total Gave',
+        amount:  state.totalGave,
+        color:   AppColors.success,
+        bg:      AppColors.successLight,
+        icon:    Icons.arrow_upward_rounded,
+        isDark:  isDark,
+      )),
+      const SizedBox(width: 12),
+      Expanded(child: _StatCard(
+        label:   'Total Got',
+        amount:  state.totalGot,
+        color:   AppColors.danger,
+        bg:      AppColors.dangerLight,
+        icon:    Icons.arrow_downward_rounded,
+        isDark:  isDark,
+      )),
     ]);
   }
 }
 
-class _MiniCard extends StatelessWidget {
+class _StatCard extends StatelessWidget {
   final String label; final double amount;
-  final Color color, bg; final IconData icon;
-  const _MiniCard({required this.label, required this.amount,
-    required this.color, required this.bg, required this.icon});
+  final Color color, bg; final IconData icon; final bool isDark;
+  const _StatCard({required this.label, required this.amount,
+    required this.color, required this.bg, required this.icon, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cs     = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -336,85 +297,18 @@ class _MiniCard extends StatelessWidget {
         border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: color, size: 16)),
+        Row(children: [
+          Container(padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(color: bg,
+                  borderRadius: BorderRadius.circular(9)),
+              child: Icon(icon, color: color, size: 14)),
+          const Spacer(),
+        ]),
         const SizedBox(height: 10),
         Text(AppFormatters.rupee(amount), style: GoogleFonts.poppins(
             fontSize: 18, fontWeight: FontWeight.w700, color: color)),
-        Text(label, style: GoogleFonts.poppins(fontSize: 12,
-            color: cs.onSurface.withOpacity(0.5))),
-      ]),
-    );
-  }
-}
-
-// ── Insights Row ──────────────────────────────────────────────────────────────
-
-class _InsightsRow extends StatelessWidget {
-  final ReportsState state;
-  const _InsightsRow({required this.state});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs     = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final txs    = state.transactions;
-    if (txs.isEmpty) return const SizedBox.shrink();
-
-    final avgTx  = (state.totalGave + state.totalGot) / txs.length;
-    final maxTx  = txs.fold(0.0, (m, t) => math.max(m, t.amount));
-    final gaveCount = txs.where((t) => t.isGave).length;
-
-    return Row(children: [
-      Expanded(child: _InsightChip(
-        label: 'Avg Entry',
-        value: AppFormatters.rupee(avgTx),
-        icon: Icons.analytics_outlined,
-        color: const Color(0xFF7C3AED),
-      )),
-      const SizedBox(width: 10),
-      Expanded(child: _InsightChip(
-        label: 'Largest',
-        value: AppFormatters.rupee(maxTx),
-        icon: Icons.trending_up_rounded,
-        color: const Color(0xFFEA580C),
-      )),
-      const SizedBox(width: 10),
-      Expanded(child: _InsightChip(
-        label: 'Gave Times',
-        value: '$gaveCount',
-        icon: Icons.repeat_rounded,
-        color: AppColors.success,
-      )),
-    ]);
-  }
-}
-
-class _InsightChip extends StatelessWidget {
-  final String label, value; final IconData icon; final Color color;
-  const _InsightChip({required this.label, required this.value,
-    required this.icon, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs     = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
-      ),
-      child: Column(children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(height: 6),
-        Text(value, style: GoogleFonts.poppins(
-            fontSize: 14, fontWeight: FontWeight.w700, color: color)),
-        Text(label, style: GoogleFonts.poppins(fontSize: 10,
-            color: cs.onSurface.withOpacity(0.5)),
-            textAlign: TextAlign.center),
+        Text(label, style: GoogleFonts.poppins(
+            fontSize: 12, color: cs.onSurface.withOpacity(0.5))),
       ]),
     );
   }
@@ -429,99 +323,98 @@ class _BarChartCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data   = state.monthlyBreakdown;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cs     = Theme.of(context).colorScheme;
     if (data.isEmpty) return const SizedBox.shrink();
-
-    final maxY = data.fold(0.0, (m, d) =>
-        math.max(m, math.max(d.gave, d.got))) * 1.25;
+    final cs     = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final maxY   = data.fold(0.0, (m, d) =>
+        math.max(m, math.max(d.gave, d.got))) * 1.3;
 
     return Container(
-      height: 200,
-      padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
+      height: 190,
+      padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          padding: const EdgeInsets.only(left: 8, bottom: 8),
           child: Row(children: [
-            _LegendDot(color: AppColors.success, label: 'Gave'),
+            _Dot(AppColors.success, 'Gave'),
             const SizedBox(width: 14),
-            _LegendDot(color: AppColors.danger,  label: 'Got'),
+            _Dot(AppColors.danger,  'Got'),
           ]),
         ),
-        Expanded(
-          child: BarChart(BarChartData(
-            alignment: BarChartAlignment.spaceAround,
-            maxY: maxY == 0 ? 100 : maxY,
-            barTouchData: BarTouchData(
-              touchTooltipData: BarTouchTooltipData(
-                getTooltipItem: (group, gi, rod, ri) {
-                  final d   = data[group.x];
-                  final lbl = ri == 0 ? 'Gave' : 'Got';
-                  final amt = ri == 0 ? d.gave : d.got;
-                  return BarTooltipItem(
-                    '$lbl\n${AppFormatters.rupee(amt)}',
-                    GoogleFonts.poppins(fontSize: 11,
-                        fontWeight: FontWeight.w600, color: Colors.white),
-                  );
-                },
-              ),
+        Expanded(child: BarChart(BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          maxY: maxY == 0 ? 100 : maxY,
+          barTouchData: BarTouchData(
+            touchTooltipData: BarTouchTooltipData(
+              getTooltipItem: (group, _, rod, ri) {
+                final d   = data[group.x];
+                final amt = ri == 0 ? d.gave : d.got;
+                return BarTooltipItem(
+                  '${ri == 0 ? 'Gave' : 'Got'}\n${AppFormatters.rupee(amt)}',
+                  GoogleFonts.poppins(fontSize: 11,
+                      fontWeight: FontWeight.w600, color: Colors.white),
+                );
+              },
             ),
-            titlesData: FlTitlesData(
-              bottomTitles: AxisTitles(sideTitles: SideTitles(
-                showTitles: true, reservedSize: 22,
-                getTitlesWidget: (v, _) => Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(data[v.toInt()].month,
-                      style: GoogleFonts.poppins(fontSize: 9,
-                          color: cs.onSurface.withOpacity(0.45))),
-                ),
-              )),
-              leftTitles: AxisTitles(sideTitles: SideTitles(
-                showTitles: true, reservedSize: 40,
-                getTitlesWidget: (v, _) => Text(
-                    AppFormatters.compactCurrency(v),
+          ),
+          titlesData: FlTitlesData(
+            bottomTitles: AxisTitles(sideTitles: SideTitles(
+              showTitles: true, reservedSize: 20,
+              getTitlesWidget: (v, _) => Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(data[v.toInt()].month,
                     style: GoogleFonts.poppins(fontSize: 9,
-                        color: cs.onSurface.withOpacity(0.4))),
-              )),
-              topTitles:   const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            ),
-            gridData: FlGridData(
-              drawVerticalLine: false,
-              getDrawingHorizontalLine: (_) => FlLine(
-                color: isDark ? AppColors.darkBorder : AppColors.border,
-                strokeWidth: 1,
+                        color: cs.onSurface.withOpacity(0.45))),
               ),
+            )),
+            leftTitles: AxisTitles(sideTitles: SideTitles(
+              showTitles: true, reservedSize: 36,
+              getTitlesWidget: (v, _) => Text(
+                  AppFormatters.compactCurrency(v),
+                  style: GoogleFonts.poppins(fontSize: 9,
+                      color: cs.onSurface.withOpacity(0.4))),
+            )),
+            topTitles:   const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          ),
+          gridData: FlGridData(
+            drawVerticalLine: false,
+            getDrawingHorizontalLine: (_) => FlLine(
+              color: isDark ? AppColors.darkBorder : AppColors.border,
+              strokeWidth: 1,
             ),
-            borderData: FlBorderData(show: false),
-            barGroups: data.asMap().entries.map((e) => BarChartGroupData(
-              x: e.key,
-              barRods: [
-                BarChartRodData(toY: e.value.gave, color: AppColors.success,
-                    width: 9, borderRadius: const BorderRadius.vertical(top: Radius.circular(4))),
-                BarChartRodData(toY: e.value.got,  color: AppColors.danger,
-                    width: 9, borderRadius: const BorderRadius.vertical(top: Radius.circular(4))),
-              ],
-            )).toList(),
-          )),
-        ),
+          ),
+          borderData: FlBorderData(show: false),
+          barGroups: data.asMap().entries.map((e) => BarChartGroupData(
+            x: e.key,
+            barRods: [
+              BarChartRodData(toY: e.value.gave, color: AppColors.success,
+                  width: 10, borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(4))),
+              BarChartRodData(toY: e.value.got,  color: AppColors.danger,
+                  width: 10, borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(4))),
+            ],
+          )).toList(),
+        ))),
       ]),
     );
   }
 }
 
-class _LegendDot extends StatelessWidget {
+class _Dot extends StatelessWidget {
   final Color color; final String label;
-  const _LegendDot({required this.color, required this.label});
+  const _Dot(this.color, this.label);
   @override
   Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
     Container(width: 10, height: 10,
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
+        decoration: BoxDecoration(color: color,
+            borderRadius: BorderRadius.circular(3))),
     const SizedBox(width: 5),
     Text(label, style: GoogleFonts.poppins(fontSize: 11,
         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
@@ -529,194 +422,206 @@ class _LegendDot extends StatelessWidget {
   ]);
 }
 
-// ── Top customers ─────────────────────────────────────────────────────────────
+// ── Grouped Transaction List ──────────────────────────────────────────────────
 
-class _TopCustomers extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final cs        = Theme.of(context).colorScheme;
-    final isDark    = Theme.of(context).brightness == Brightness.dark;
-    final customers = ref.watch(customersStreamProvider).valueOrNull ?? [];
-    if (customers.isEmpty) return const SizedBox.shrink();
-
-    final sorted = [...customers]
-      ..sort((a, b) => b.absBalance.compareTo(a.absBalance));
-    final top = sorted.take(5).toList();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
-      ),
-      child: Column(
-        children: top.asMap().entries.map((e) {
-          final c   = e.value;
-          final isLast = e.key == top.length - 1;
-          return Column(children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(children: [
-                Container(width: 36, height: 36,
-                    decoration: BoxDecoration(
-                      color: (c.isCreditor ? AppColors.success : AppColors.danger)
-                          .withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(child: Text(c.initials,
-                        style: GoogleFonts.poppins(fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: c.isCreditor ? AppColors.success : AppColors.danger)))),
-                const SizedBox(width: 12),
-                Expanded(child: Text(c.name, style: GoogleFonts.poppins(
-                    fontSize: 14, fontWeight: FontWeight.w600),
-                    maxLines: 1, overflow: TextOverflow.ellipsis)),
-                Text(
-                  '${c.isCreditor ? '+' : '-'}${AppFormatters.rupee(c.absBalance)}',
-                  style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700,
-                      color: c.isCreditor ? AppColors.success : AppColors.danger),
-                ),
-              ]),
-            ),
-            if (!isLast) Divider(height: 1,
-                color: isDark ? AppColors.darkBorder : AppColors.border,
-                indent: 64),
-          ]);
-        }).toList(),
-      ),
-    );
-  }
-}
-
-// ── Transactions Tab ──────────────────────────────────────────────────────────
-
-class _TransactionsTab extends StatelessWidget {
+class _GroupedTxList extends StatelessWidget {
   final ReportsState state;
-  const _TransactionsTab({required this.state});
+  const _GroupedTxList({required this.state});
 
   @override
   Widget build(BuildContext context) {
-    final txs  = state.transactions;
-    if (txs.isEmpty) return _EmptyReport();
+    final cs     = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Group by date
     final Map<String, List<TransactionEntity>> grouped = {};
-    for (final tx in txs) {
-      final key = DateFormat('d MMMM yyyy').format(tx.date);
+    for (final tx in state.transactions) {
+      final key = DateFormat('d MMM yyyy').format(tx.date);
       grouped.putIfAbsent(key, () => []).add(tx);
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      itemCount: grouped.length,
-      itemBuilder: (ctx, i) {
-        final date  = grouped.keys.elementAt(i);
-        final items = grouped[date]!;
-        final dayGave = items.where((t) => t.isGave).fold(0.0, (s, t) => s + t.amount);
-        final dayGot  = items.where((t) => t.isGot ).fold(0.0, (s, t) => s + t.amount);
-
-        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Date header
-          Padding(
-            padding: const EdgeInsets.only(top: 16, bottom: 8),
-            child: Row(children: [
-              Text(date, style: GoogleFonts.poppins(
-                  fontSize: 13, fontWeight: FontWeight.w700)),
-              const Spacer(),
-              if (dayGave > 0) Text('+${AppFormatters.rupee(dayGave)}',
-                  style: GoogleFonts.poppins(fontSize: 12,
-                      fontWeight: FontWeight.w600, color: AppColors.success)),
-              if (dayGot > 0) ...[
-                const SizedBox(width: 8),
-                Text('-${AppFormatters.rupee(dayGot)}',
-                    style: GoogleFonts.poppins(fontSize: 12,
-                        fontWeight: FontWeight.w600, color: AppColors.danger)),
-              ],
-            ]),
+    return Container(
+      decoration: BoxDecoration(
+        color:        cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
+      ),
+      child: Column(children: [
+        // Column header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color:        isDark ? AppColors.darkSurfaceVariant
+                : AppColors.surfaceVariant,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            border: Border(
+              bottom: BorderSide(
+                  color: isDark ? AppColors.darkBorder : AppColors.border),
+            ),
           ),
-          ...items.map((tx) => _TxRow(tx: tx)),
-        ]);
-      },
+          child: Row(children: [
+            Expanded(flex: 4, child: Text('DATE / NOTE',
+                style: GoogleFonts.poppins(fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface.withOpacity(0.45),
+                    letterSpacing: 0.8))),
+            Expanded(flex: 3, child: Text('GAVE',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.success.withOpacity(0.8),
+                    letterSpacing: 0.8))),
+            Expanded(flex: 3, child: Text('GOT',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.danger.withOpacity(0.8),
+                    letterSpacing: 0.8))),
+          ]),
+        ),
+
+        // Rows grouped by date
+        ...grouped.entries.expand((group) {
+          final date  = group.key;
+          final items = group.value;
+          final dayGave = items.where((t) => t.isGave).fold(0.0, (s, t) => s + t.amount);
+          final dayGot  = items.where((t) => t.isGot ).fold(0.0, (s, t) => s + t.amount);
+
+          return [
+            // Date subheader
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              color: isDark
+                  ? AppColors.darkSurface.withOpacity(0.5)
+                  : AppColors.surfaceVariant.withOpacity(0.5),
+              child: Row(children: [
+                Text(date, style: GoogleFonts.poppins(
+                    fontSize: 12, fontWeight: FontWeight.w700,
+                    color: cs.onSurface.withOpacity(0.6))),
+                const Spacer(),
+                if (dayGave > 0)
+                  Text('+${AppFormatters.rupee(dayGave)}',
+                      style: GoogleFonts.poppins(fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.success)),
+                if (dayGave > 0 && dayGot > 0)
+                  Text('  ·  ',
+                      style: GoogleFonts.poppins(
+                          color: cs.onSurface.withOpacity(0.3))),
+                if (dayGot > 0)
+                  Text('-${AppFormatters.rupee(dayGot)}',
+                      style: GoogleFonts.poppins(fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.danger)),
+              ]),
+            ),
+            // Transaction rows for this date
+            ...items.map((tx) => _TxRow(tx: tx, isDark: isDark, cs: cs)),
+          ];
+        }).toList(),
+      ]),
     );
   }
 }
 
 class _TxRow extends StatelessWidget {
   final TransactionEntity tx;
-  const _TxRow({required this.tx});
+  final bool isDark;
+  final ColorScheme cs;
+  const _TxRow({required this.tx, required this.isDark, required this.cs});
 
   @override
   Widget build(BuildContext context) {
     final isGave = tx.isGave;
-    final color  = isGave ? AppColors.success : AppColors.danger;
-    final cs     = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fmt    = AppFormatters.compactCurrency(tx.amount);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
+        border: Border(
+          bottom: BorderSide(
+              color: isDark ? AppColors.darkBorder : AppColors.border,
+              width: 0.5),
+        ),
       ),
-      child: Row(children: [
-        Container(
-          padding: const EdgeInsets.all(7),
-          decoration: BoxDecoration(
-            color: isGave ? AppColors.successLight : AppColors.dangerLight,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            isGave ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-            size: 14, color: color,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(
-            tx.note?.isNotEmpty == true ? tx.note! : isGave ? 'You gave money' : 'You got money',
-            style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500),
-            maxLines: 1, overflow: TextOverflow.ellipsis,
-          ),
-          Text(DateFormat('h:mm a').format(tx.date),
-              style: GoogleFonts.poppins(fontSize: 11,
-                  color: cs.onSurface.withOpacity(0.4))),
-        ])),
-        Text(
-          '${isGave ? '+' : '-'}${AppFormatters.rupee(tx.amount)}',
-          style: GoogleFonts.poppins(fontSize: 14,
-              fontWeight: FontWeight.w700, color: color),
-        ),
-      ]),
+      child: IntrinsicHeight(
+        child: Row(children: [
+          // Date + note
+          Expanded(flex: 4, child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment:  MainAxisAlignment.center,
+              children: [
+                Text(DateFormat('h:mm a').format(tx.date),
+                    style: GoogleFonts.poppins(fontSize: 11,
+                        color: cs.onSurface.withOpacity(0.5))),
+                if (tx.note?.isNotEmpty == true)
+                  Text(tx.note!, style: GoogleFonts.poppins(
+                      fontSize: 12, fontWeight: FontWeight.w500),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          )),
+          VerticalDivider(width: 1,
+              color: isDark ? AppColors.darkBorder : AppColors.border),
+          // Gave
+          Expanded(flex: 3, child: Center(child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: isGave
+                ? Text('₹$fmt', textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.success))
+                : Text('—', textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(fontSize: 13,
+                        color: cs.onSurface.withOpacity(0.2))),
+          ))),
+          VerticalDivider(width: 1,
+              color: isDark ? AppColors.darkBorder : AppColors.border),
+          // Got
+          Expanded(flex: 3, child: Center(child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: !isGave
+                ? Text('₹$fmt', textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.danger))
+                : Text('—', textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(fontSize: 13,
+                        color: cs.onSurface.withOpacity(0.2))),
+          ))),
+        ]),
+      ),
     );
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
+class _Label extends StatelessWidget {
   final String label;
-  const _SectionLabel({required this.label});
+  const _Label(this.label);
   @override
   Widget build(BuildContext context) => Text(label,
       style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700));
 }
 
-class _EmptyReport extends StatelessWidget {
+class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Icon(Icons.bar_chart_outlined, size: 56, color: cs.onSurface.withOpacity(0.2)),
-      const SizedBox(height: 16),
-      Text('No transactions in this period',
-          style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600),
-          textAlign: TextAlign.center),
-      const SizedBox(height: 8),
-      Text('Try a different date range.',
-          style: GoogleFonts.poppins(fontSize: 13,
-              color: cs.onSurface.withOpacity(0.45))),
-    ]));
+    return Center(child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.bar_chart_outlined, size: 56,
+            color: cs.onSurface.withOpacity(0.18)),
+        const SizedBox(height: 16),
+        Text('No transactions in this period',
+            style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center),
+        const SizedBox(height: 8),
+        Text('Try a different date range.',
+            style: GoogleFonts.poppins(fontSize: 13,
+                color: cs.onSurface.withOpacity(0.45))),
+      ],
+    ));
   }
 }

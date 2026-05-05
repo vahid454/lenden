@@ -60,6 +60,7 @@ class CustomerFormNotifier extends StateNotifier<CustomerFormState> {
       return false;
     }
 
+    final currentUser = _ref.read(currentUserProvider);
     final customer = CustomerEntity(
       id: '', // Firestore will generate this
       userId: userId,
@@ -68,6 +69,9 @@ class CustomerFormNotifier extends StateNotifier<CustomerFormState> {
       address: address?.trim().isEmpty == true ? null : address?.trim(),
       notes: notes?.trim().isEmpty == true ? null : notes?.trim(),
       createdAt: DateTime.now(),
+      // Store owner info so the other party sees who added them
+      ownerName:  currentUser?.name,
+      ownerPhone: currentUser?.phone,
     );
 
     final useCase = _ref.read(addCustomerUseCaseProvider);

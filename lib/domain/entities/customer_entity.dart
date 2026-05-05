@@ -1,21 +1,22 @@
 import 'package:equatable/equatable.dart';
 
-/// Core customer domain entity — pure Dart, zero Firebase dependencies.
-/// A "customer" in LenDen is any person/party the user lends to or borrows from.
 class CustomerEntity extends Equatable {
   final String id;
-  final String userId;       // owner of this record
+  final String userId;
   final String name;
   final String phone;
   final String? address;
   final String? notes;
   final DateTime createdAt;
   final DateTime? updatedAt;
-
-  /// Running balance for this customer.
-  /// Positive → they owe YOU (you gave money).
-  /// Negative → YOU owe them (they gave money).
   final double balance;
+
+  /// The name of the person who created this customer record.
+  /// Populated for shared ledger records so Y can see X's name.
+  final String? ownerName;
+
+  /// The phone of the person who created this customer record.
+  final String? ownerPhone;
 
   const CustomerEntity({
     required this.id,
@@ -27,20 +28,15 @@ class CustomerEntity extends Equatable {
     required this.createdAt,
     this.updatedAt,
     this.balance = 0.0,
+    this.ownerName,
+    this.ownerPhone,
   });
 
-  // ── Derived helpers ───────────────────────────────────────────────────────
-
-  /// True when the customer owes the user money.
   bool get isCreditor => balance > 0;
+  bool get isDebtor   => balance < 0;
+  bool get isSettled  => balance == 0;
+  double get absBalance => balance.abs();
 
-  /// True when the user owes the customer money.
-  bool get isDebtor => balance < 0;
-
-  /// True when balance is exactly zero.
-  bool get isSettled => balance == 0;
-
-  /// Returns initials for avatar (e.g. "Rahul Sharma" → "RS").
   String get initials {
     final parts = name.trim().split(RegExp(r'\s+'));
     if (parts.length >= 2) {
@@ -49,45 +45,25 @@ class CustomerEntity extends Equatable {
     return name.substring(0, name.length.clamp(0, 2)).toUpperCase();
   }
 
-  /// Absolute value of balance — safe for display.
-  double get absBalance => balance.abs();
-
-  // ── CopyWith ──────────────────────────────────────────────────────────────
-
   CustomerEntity copyWith({
-    String? id,
-    String? userId,
-    String? name,
-    String? phone,
-    String? address,
-    String? notes,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-    double? balance,
+    String? id, String? userId, String? name, String? phone,
+    String? address, String? notes, DateTime? createdAt, DateTime? updatedAt,
+    double? balance, String? ownerName, String? ownerPhone,
   }) {
     return CustomerEntity(
-      id: id ?? this.id,
-      userId: userId ?? this.userId,
-      name: name ?? this.name,
-      phone: phone ?? this.phone,
-      address: address ?? this.address,
-      notes: notes ?? this.notes,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+      id: id ?? this.id, userId: userId ?? this.userId,
+      name: name ?? this.name, phone: phone ?? this.phone,
+      address: address ?? this.address, notes: notes ?? this.notes,
+      createdAt: createdAt ?? this.createdAt, updatedAt: updatedAt ?? this.updatedAt,
       balance: balance ?? this.balance,
+      ownerName:  ownerName  ?? this.ownerName,
+      ownerPhone: ownerPhone ?? this.ownerPhone,
     );
   }
 
   @override
   List<Object?> get props => [
-        id,
-        userId,
-        name,
-        phone,
-        address,
-        notes,
-        createdAt,
-        updatedAt,
-        balance,
-      ];
+    id, userId, name, phone, address, notes, createdAt, updatedAt, balance,
+    ownerName, ownerPhone,
+  ];
 }

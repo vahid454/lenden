@@ -251,11 +251,19 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
     );
 
     if (savedTransaction != null && mounted) {
+      // Add to optimistic map for instant UI feedback
       setState(() {
         _optimisticTransactions[savedTransaction.id] = savedTransaction;
       });
-      ref.invalidate(transactionsStreamProvider(customer.id));
-      ref.invalidate(customersStreamProvider);
+      // Firestore snapshots() fires automatically — no invalidate needed.
+      // Clear optimistic entry after stream has time to update (1.5s)
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted) {
+          setState(() {
+            _optimisticTransactions.remove(savedTransaction.id);
+          });
+        }
+      });
     }
   }
 }
@@ -319,20 +327,34 @@ class _HeaderContent extends StatelessWidget {
             if (isSharedLedger) ...[
               const SizedBox(height: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: cs.primary.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(999),
+                  color: cs.primary.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cs.primary.withOpacity(0.15)),
                 ),
-                child: Text(
-                  'Shared ledger · Read only',
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: cs.primary,
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(
+                    'Added by ${customer.ownerName ?? 'Unknown'}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: cs.primary),
                   ),
-                ),
+                  if (customer.ownerPhone != null && customer.ownerPhone!.isNotEmpty)
+                    Text(
+                      customer.ownerPhone!,
+                      style: GoogleFonts.poppins(
+                        fontSize: 11, color: cs.primary.withOpacity(0.7)),
+                    ),
+                  const SizedBox(height: 4),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.lock_outline_rounded, size: 10, color: cs.primary.withOpacity(0.6)),
+                    const SizedBox(width: 4),
+                    Text('Shared ledger · Read only',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10, color: cs.primary.withOpacity(0.6),
+                        fontWeight: FontWeight.w600)),
+                  ]),
+                ]),
               ),
             ],
             const SizedBox(height: 14),
@@ -441,6 +463,22 @@ class _QuickActions extends StatelessWidget {
           final uri = Uri.parse('sms:${customer.phone}');
           if (await canLaunchUrl(uri)) {
             await launchUrl(uri);
+          }
+        }),
+        const SizedBox(width: 8),
+        _Btn(Icons.notifications_outlined, 'Remind', const Color(0xFFD97706), () async {
+          final bal = customer.balance;
+          final amt = bal.abs().toStringAsFixed(0);
+          final msg = bal > 0
+              ? 'Hi ${customer.name}, friendly reminder: you owe me ₹$amt. Please clear when convenient. - Sent via LenDen'
+              : 'Hi ${customer.name}, reminder: I owe you ₹$amt. Will settle soon. - Sent via LenDen';
+          final encoded = Uri.encodeComponent(msg);
+          final waUri  = Uri.parse('whatsapp://send?phone=91${customer.phone}&text=$encoded');
+          final smsUri = Uri.parse('sms:${customer.phone}?body=$encoded');
+          if (await canLaunchUrl(waUri)) {
+            await launchUrl(waUri, mode: LaunchMode.externalApplication);
+          } else if (await canLaunchUrl(smsUri)) {
+            await launchUrl(smsUri);
           }
         }),
         const SizedBox(width: 8),
@@ -569,7 +607,11 @@ class _TransactionListBody extends StatelessWidget {
       grouped.putIfAbsent(key, () => []).add(tx);
     }
 
-    return ListView.builder(
+    return Column(
+      children: [
+        // Column headers
+        _LedgerColumnHeader(),
+        Expanded(child: ListView.builder(
       padding: const EdgeInsets.only(bottom: 120),
       itemCount: grouped.length,
       itemBuilder: (ctx, groupIdx) {
@@ -594,7 +636,7 @@ class _TransactionListBody extends StatelessWidget {
           ],
         );
       },
-    );
+    )),],);
   }
 
   Widget _buildEmpty(BuildContext context) {
@@ -689,6 +731,57 @@ class _TransactionListBody extends StatelessWidget {
       )
           .animate(onPlay: (c) => c.repeat())
           .shimmer(duration: 1200.ms, color: AppColors.shimmerHighlight),
+    );
+  }
+}
+
+class _LedgerColumnHeader extends StatelessWidget {
+  const _LedgerColumnHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs     = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color:        isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
+      ),
+      child: Row(children: [
+        Expanded(flex: 4,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Text('DATE / NOTE',
+                style: GoogleFonts.poppins(fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface.withOpacity(0.45),
+                    letterSpacing: 0.8)),
+          ),
+        ),
+        Container(width: 1, height: 16,
+            color: isDark ? AppColors.darkBorder : AppColors.border),
+        Expanded(flex: 3,
+          child: Text('GAVE ↑',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.success.withOpacity(0.8),
+                  letterSpacing: 0.8)),
+        ),
+        Container(width: 1, height: 16,
+            color: isDark ? AppColors.darkBorder : AppColors.border),
+        Expanded(flex: 3,
+          child: Text('GOT ↓',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.danger.withOpacity(0.8),
+                  letterSpacing: 0.8)),
+        ),
+      ]),
     );
   }
 }
