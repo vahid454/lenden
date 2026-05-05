@@ -60,5 +60,21 @@ service cloud.firestore {
       // Deletion is blocked in app for long-term financial record retention.
       allow delete: if false;
     }
+
+    // ── Cashbook ──────────────────────────────────────────────────────────
+    match /cashbook/{entryId} {
+      allow read: if isSignedIn()
+                    && resource.data.userId == request.auth.uid;
+
+      allow create: if isSignedIn()
+                      && request.resource.data.userId == request.auth.uid
+                      && request.resource.data.amount is number
+                      && request.resource.data.amount > 0
+                      && request.resource.data.type in ['in', 'out']
+                      && request.resource.data.yearMonthDay is string;
+
+      // Cashbook entries are append-only for audit integrity.
+      allow update, delete: if false;
+    }
   }
 }

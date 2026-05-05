@@ -9,6 +9,7 @@ import 'package:printing/printing.dart';
 
 import '../../domain/entities/customer_entity.dart';
 import '../../domain/entities/transaction_entity.dart';
+import '../../presentation/cashbook/providers/cashbook_provider.dart';
 import '../utils/app_formatters.dart';
 
 /// Generates a professionally styled PDF ledger report.
@@ -18,13 +19,13 @@ class PdfExportService {
   PdfExportService({Logger? logger}) : _log = logger ?? Logger();
 
   // ── Brand colours (as PdfColor) ───────────────────────────────────────────
-  static const _primaryBlue  = PdfColor.fromInt(0xFF1A56DB);
+  static const _primaryBlue = PdfColor.fromInt(0xFF1A56DB);
   static const _successGreen = PdfColor.fromInt(0xFF16A34A);
-  static const _dangerRed    = PdfColor.fromInt(0xFFDC2626);
-  static const _lightGray    = PdfColor.fromInt(0xFFF3F4F6);
-  static const _borderGray   = PdfColor.fromInt(0xFFE5E7EB);
-  static const _textDark     = PdfColor.fromInt(0xFF111827);
-  static const _textMuted    = PdfColor.fromInt(0xFF6B7280);
+  static const _dangerRed = PdfColor.fromInt(0xFFDC2626);
+  static const _lightGray = PdfColor.fromInt(0xFFF3F4F6);
+  static const _borderGray = PdfColor.fromInt(0xFFE5E7EB);
+  static const _textDark = PdfColor.fromInt(0xFF111827);
+  static const _textMuted = PdfColor.fromInt(0xFF6B7280);
 
   // ── Generate full customer ledger PDF ─────────────────────────────────────
 
@@ -34,7 +35,7 @@ class PdfExportService {
     required String businessName,
     required String ownerName,
   }) async {
-    final doc  = pw.Document(compress: true);
+    final doc = pw.Document(compress: true);
     final font = await PdfGoogleFonts.poppinsRegular();
     final bold = await PdfGoogleFonts.poppinsBold();
     final mono = await PdfGoogleFonts.sourceCodeProRegular();
@@ -74,7 +75,7 @@ class PdfExportService {
     }
 
     // Write to temp directory
-    final dir  = await getTemporaryDirectory();
+    final dir = await getTemporaryDirectory();
     final name = 'LenDen_${customer.name.replaceAll(' ', '_')}_'
         '${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf';
     final file = File('${dir.path}/$name');
@@ -93,7 +94,7 @@ class PdfExportService {
     required DateTime from,
     required DateTime to,
   }) async {
-    final doc  = pw.Document(compress: true);
+    final doc = pw.Document(compress: true);
     final font = await PdfGoogleFonts.poppinsRegular();
     final bold = await PdfGoogleFonts.poppinsBold();
 
@@ -114,11 +115,78 @@ class PdfExportService {
       footer: (ctx) => _buildFooter(font, ctx.pageNumber, ctx.pagesCount),
     ));
 
-    final dir  = await getTemporaryDirectory();
-    final name = 'LenDen_Report_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf';
+    final dir = await getTemporaryDirectory();
+    final name =
+        'LenDen_Report_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf';
     final file = File('${dir.path}/$name');
     await file.writeAsBytes(await doc.save());
     _log.i('Report PDF generated: ${file.path}');
+    return file;
+  }
+
+  // ── Generate cashbook report PDF ─────────────────────────────────────────
+
+  Future<File> generateCashbookReport({
+    required List<CashEntry> entries,
+    required String userName,
+    required String businessName,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final doc = pw.Document(compress: true);
+    final font = await PdfGoogleFonts.poppinsRegular();
+    final bold = await PdfGoogleFonts.poppinsBold();
+    final mono = await PdfGoogleFonts.sourceCodeProRegular();
+    final totalIn =
+        entries.where((e) => e.isCashIn).fold(0.0, (s, e) => s + e.amount);
+    final totalOut =
+        entries.where((e) => !e.isCashIn).fold(0.0, (s, e) => s + e.amount);
+    final balance = totalIn - totalOut;
+
+    doc.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(32),
+      build: (ctx) => [
+        _buildHeader(font, bold, businessName, userName),
+        pw.SizedBox(height: 16),
+        _buildCashbookTitle(font, bold, from, to),
+        pw.SizedBox(height: 14),
+        pw.Row(children: [
+          _summaryBox(font, bold, 'Cash In', AppFormatters.rupee(totalIn),
+              _successGreen),
+          pw.SizedBox(width: 10),
+          _summaryBox(font, bold, 'Cash Out', AppFormatters.rupee(totalOut),
+              _dangerRed),
+          pw.SizedBox(width: 10),
+          _summaryBox(
+            font,
+            bold,
+            'Net Cash',
+            AppFormatters.rupee(balance.abs()),
+            balance >= 0 ? _successGreen : _dangerRed,
+          ),
+        ]),
+        pw.SizedBox(height: 20),
+        if (entries.isEmpty)
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.all(16),
+            decoration: const pw.BoxDecoration(color: _lightGray),
+            child: pw.Text('No cashbook entries in this period.',
+                style:
+                    pw.TextStyle(font: font, fontSize: 11, color: _textMuted)),
+          )
+        else
+          _buildCashbookTable(font, bold, mono, entries),
+      ],
+      footer: (ctx) => _buildFooter(font, ctx.pageNumber, ctx.pagesCount),
+    ));
+
+    final dir = await getTemporaryDirectory();
+    final suffix = DateFormat('yyyyMMdd').format(DateTime.now());
+    final file = File('${dir.path}/LenDen_Cashbook_$suffix.pdf');
+    await file.writeAsBytes(await doc.save());
+    _log.i('Cashbook PDF generated: ${file.path}');
     return file;
   }
 
@@ -138,19 +206,24 @@ class PdfExportService {
         children: [
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
             pw.Text('LenDen',
-                style: pw.TextStyle(font: bold, fontSize: 24, color: PdfColors.white)),
+                style: pw.TextStyle(
+                    font: bold, fontSize: 24, color: PdfColors.white)),
             if (bizName.isNotEmpty)
               pw.Text(bizName,
-                  style: pw.TextStyle(font: font, fontSize: 11, color: PdfColors.white)),
+                  style: pw.TextStyle(
+                      font: font, fontSize: 11, color: PdfColors.white)),
           ]),
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
             pw.Text('Ledger Report',
-                style: pw.TextStyle(font: bold, fontSize: 13, color: PdfColors.white)),
+                style: pw.TextStyle(
+                    font: bold, fontSize: 13, color: PdfColors.white)),
             if (ownerName.isNotEmpty)
               pw.Text('Prepared by: $ownerName',
-                  style: pw.TextStyle(font: font, fontSize: 9, color: PdfColors.white)),
+                  style: pw.TextStyle(
+                      font: font, fontSize: 9, color: PdfColors.white)),
             pw.Text('Generated: ${AppFormatters.shortDate(DateTime.now())}',
-                style: pw.TextStyle(font: font, fontSize: 9, color: PdfColors.white)),
+                style: pw.TextStyle(
+                    font: font, fontSize: 9, color: PdfColors.white)),
           ]),
         ],
       ),
@@ -169,8 +242,8 @@ class PdfExportService {
   pw.Widget _buildCustomerCard(
       pw.Font font, pw.Font bold, CustomerEntity customer) {
     final isCreditor = customer.balance >= 0;
-    final balColor   = isCreditor ? _successGreen : _dangerRed;
-    final balLabel   = isCreditor
+    final balColor = isCreditor ? _successGreen : _dangerRed;
+    final balLabel = isCreditor
         ? '${customer.name} will give you'
         : 'You will give ${customer.name}';
 
@@ -185,12 +258,15 @@ class PdfExportService {
         children: [
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
             pw.Text(customer.name,
-                style: pw.TextStyle(font: bold, fontSize: 15)),
+                style:
+                    pw.TextStyle(font: bold, fontSize: 15, color: _textDark)),
             pw.Text(customer.phone,
-                style: pw.TextStyle(font: font, fontSize: 11, color: _textMuted)),
+                style:
+                    pw.TextStyle(font: font, fontSize: 11, color: _textMuted)),
             if (customer.address != null && customer.address!.isNotEmpty)
               pw.Text(customer.address!,
-                  style: pw.TextStyle(font: font, fontSize: 10, color: _textMuted)),
+                  style: pw.TextStyle(
+                      font: font, fontSize: 10, color: _textMuted)),
           ]),
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
             pw.Text(AppFormatters.rupee(customer.absBalance),
@@ -206,15 +282,17 @@ class PdfExportService {
   pw.Widget _buildSummaryRow(
       pw.Font font, pw.Font bold, List<TransactionEntity> txs) {
     final gave = txs.where((t) => t.isGave).fold(0.0, (s, t) => s + t.amount);
-    final got  = txs.where((t) => t.isGot ).fold(0.0, (s, t) => s + t.amount);
-    final net  = gave - got;
+    final got = txs.where((t) => t.isGot).fold(0.0, (s, t) => s + t.amount);
+    final net = gave - got;
 
     return pw.Row(children: [
-      _summaryBox(font, bold, 'Total Gave', AppFormatters.rupee(gave), _successGreen),
+      _summaryBox(
+          font, bold, 'Total Gave', AppFormatters.rupee(gave), _successGreen),
       pw.SizedBox(width: 10),
-      _summaryBox(font, bold, 'Total Got',  AppFormatters.rupee(got),  _dangerRed),
+      _summaryBox(
+          font, bold, 'Total Got', AppFormatters.rupee(got), _dangerRed),
       pw.SizedBox(width: 10),
-      _summaryBox(font, bold, 'Net Balance',AppFormatters.rupee(net.abs()),
+      _summaryBox(font, bold, 'Net Balance', AppFormatters.rupee(net.abs()),
           net >= 0 ? _successGreen : _dangerRed),
     ]);
   }
@@ -232,7 +310,8 @@ class PdfExportService {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(label,
-                style: pw.TextStyle(font: font, fontSize: 9, color: _textMuted)),
+                style:
+                    pw.TextStyle(font: font, fontSize: 9, color: _textMuted)),
             pw.SizedBox(height: 3),
             pw.Text(value,
                 style: pw.TextStyle(font: bold, fontSize: 13, color: color)),
@@ -247,17 +326,29 @@ class PdfExportService {
       color: _lightGray,
       padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: pw.Row(children: [
-        pw.Expanded(flex: 2, child: pw.Text('DATE',
-            style: pw.TextStyle(font: bold, fontSize: 9, color: _textMuted))),
-        pw.Expanded(flex: 3, child: pw.Text('NOTE',
-            style: pw.TextStyle(font: bold, fontSize: 9, color: _textMuted))),
-        pw.Expanded(flex: 2, child: pw.Text('TYPE',
-            style: pw.TextStyle(font: bold, fontSize: 9, color: _textMuted))),
-        pw.Expanded(flex: 2, child: pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Text('AMOUNT',
-              style: pw.TextStyle(font: bold, fontSize: 9, color: _textMuted)),
-        )),
+        pw.Expanded(
+            flex: 2,
+            child: pw.Text('DATE',
+                style:
+                    pw.TextStyle(font: bold, fontSize: 9, color: _textMuted))),
+        pw.Expanded(
+            flex: 3,
+            child: pw.Text('NOTE',
+                style:
+                    pw.TextStyle(font: bold, fontSize: 9, color: _textMuted))),
+        pw.Expanded(
+            flex: 2,
+            child: pw.Text('TYPE',
+                style:
+                    pw.TextStyle(font: bold, fontSize: 9, color: _textMuted))),
+        pw.Expanded(
+            flex: 2,
+            child: pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Text('AMOUNT',
+                  style:
+                      pw.TextStyle(font: bold, fontSize: 9, color: _textMuted)),
+            )),
       ]),
     );
   }
@@ -266,48 +357,58 @@ class PdfExportService {
       pw.Font font, pw.Font mono, List<TransactionEntity> txs) {
     return pw.Column(
       children: txs.asMap().entries.map((entry) {
-        final i      = entry.key;
-        final tx     = entry.value;
+        final i = entry.key;
+        final tx = entry.value;
         final isGave = tx.isGave;
-        final color  = isGave ? _successGreen : _dangerRed;
-        final sign   = isGave ? '+' : '-';
-        final bg     = i.isEven ? PdfColors.white : _lightGray;
+        final color = isGave ? _successGreen : _dangerRed;
+        final sign = isGave ? '+' : '-';
+        final bg = i.isEven ? PdfColors.white : _lightGray;
 
         return pw.Container(
           color: bg,
           padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           child: pw.Row(children: [
-            pw.Expanded(flex: 2, child: pw.Text(
-                AppFormatters.shortDate(tx.date),
-                style: pw.TextStyle(font: font, fontSize: 9))),
-            pw.Expanded(flex: 3, child: pw.Text(
-                tx.note?.isNotEmpty == true ? tx.note! : '—',
-                style: pw.TextStyle(font: font, fontSize: 9, color: _textMuted))),
-            pw.Expanded(flex: 2, child: pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: pw.BoxDecoration(
-                color: isGave
-                    ? PdfColor.fromInt(0xFFDCFCE7)
-                    : PdfColor.fromInt(0xFFFEE2E2),
-                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
-              ),
-              child: pw.Text(
-                  isGave ? 'You Gave' : 'You Got',
-                  style: pw.TextStyle(font: font, fontSize: 8, color: color)),
-            )),
-            pw.Expanded(flex: 2, child: pw.Align(
-              alignment: pw.Alignment.centerRight,
-              child: pw.Text(
-                  '$sign${AppFormatters.rupee(tx.amount)}',
-                  style: pw.TextStyle(font: mono, fontSize: 9, color: color)),
-            )),
+            pw.Expanded(
+                flex: 2,
+                child: pw.Text(AppFormatters.shortDate(tx.date),
+                    style: pw.TextStyle(font: font, fontSize: 9))),
+            pw.Expanded(
+                flex: 3,
+                child: pw.Text(tx.note?.isNotEmpty == true ? tx.note! : '—',
+                    style: pw.TextStyle(
+                        font: font, fontSize: 9, color: _textMuted))),
+            pw.Expanded(
+                flex: 2,
+                child: pw.Container(
+                  padding:
+                      const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: pw.BoxDecoration(
+                    color: isGave
+                        ? PdfColor.fromInt(0xFFDCFCE7)
+                        : PdfColor.fromInt(0xFFFEE2E2),
+                    borderRadius:
+                        const pw.BorderRadius.all(pw.Radius.circular(4)),
+                  ),
+                  child: pw.Text(isGave ? 'You Gave' : 'You Got',
+                      style:
+                          pw.TextStyle(font: font, fontSize: 8, color: color)),
+                )),
+            pw.Expanded(
+                flex: 2,
+                child: pw.Align(
+                  alignment: pw.Alignment.centerRight,
+                  child: pw.Text('$sign${AppFormatters.rupee(tx.amount)}',
+                      style:
+                          pw.TextStyle(font: mono, fontSize: 9, color: color)),
+                )),
           ]),
         );
       }).toList(),
     );
   }
 
-  pw.Widget _buildReportPeriod(pw.Font font, pw.Font bold, DateTime from, DateTime to) {
+  pw.Widget _buildReportPeriod(
+      pw.Font font, pw.Font bold, DateTime from, DateTime to) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(10),
       decoration: const pw.BoxDecoration(color: _lightGray),
@@ -318,6 +419,95 @@ class PdfExportService {
             '${AppFormatters.longDate(from)} → ${AppFormatters.longDate(to)}',
             style: pw.TextStyle(font: font, fontSize: 11)),
       ]),
+    );
+  }
+
+  pw.Widget _buildCashbookTitle(
+    pw.Font font,
+    pw.Font bold,
+    DateTime from,
+    DateTime to,
+  ) {
+    final sameDay =
+        from.year == to.year && from.month == to.month && from.day == to.day;
+    final label = sameDay
+        ? AppFormatters.longDate(from)
+        : '${AppFormatters.longDate(from)} to ${AppFormatters.longDate(to)}';
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(10),
+      decoration: const pw.BoxDecoration(color: _lightGray),
+      child: pw.Row(children: [
+        pw.Text('Cashbook Report: ',
+            style: pw.TextStyle(font: bold, fontSize: 11)),
+        pw.Text(label, style: pw.TextStyle(font: font, fontSize: 11)),
+      ]),
+    );
+  }
+
+  pw.Widget _buildCashbookTable(
+    pw.Font font,
+    pw.Font bold,
+    pw.Font mono,
+    List<CashEntry> entries,
+  ) {
+    return pw.Table(
+      border: pw.TableBorder.all(color: _borderGray, width: 0.5),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(2),
+        1: const pw.FlexColumnWidth(2),
+        2: const pw.FlexColumnWidth(4),
+        3: const pw.FlexColumnWidth(2),
+        4: const pw.FlexColumnWidth(2),
+      },
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: _lightGray),
+          children: ['DATE', 'TIME', 'NOTE', 'CASH IN', 'CASH OUT']
+              .map((h) => pw.Padding(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text(h,
+                        style: pw.TextStyle(
+                            font: bold, fontSize: 8, color: _textMuted)),
+                  ))
+              .toList(),
+        ),
+        ...entries.map((entry) {
+          final amount = AppFormatters.rupee(entry.amount);
+          return pw.TableRow(children: [
+            _cashCell(font, AppFormatters.shortDate(entry.date)),
+            _cashCell(font, DateFormat('h:mm a').format(entry.createdAt)),
+            _cashCell(font, entry.note?.isNotEmpty == true ? entry.note! : '-'),
+            _cashAmountCell(
+              mono,
+              entry.isCashIn ? amount : '-',
+              entry.isCashIn ? _successGreen : _textMuted,
+            ),
+            _cashAmountCell(
+              mono,
+              !entry.isCashIn ? amount : '-',
+              !entry.isCashIn ? _dangerRed : _textMuted,
+            ),
+          ]);
+        }),
+      ],
+    );
+  }
+
+  pw.Widget _cashCell(pw.Font font, String text) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(6),
+      child: pw.Text(text, style: pw.TextStyle(font: font, fontSize: 8)),
+    );
+  }
+
+  pw.Widget _cashAmountCell(pw.Font font, String text, PdfColor color) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(6),
+      child: pw.Align(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text(text,
+            style: pw.TextStyle(font: font, fontSize: 8, color: color)),
+      ),
     );
   }
 
@@ -346,25 +536,33 @@ class PdfExportService {
           children: [
             pw.TableRow(
               decoration: const pw.BoxDecoration(color: _lightGray),
-              children: ['CUSTOMER', 'PHONE', 'BALANCE'].map((h) =>
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
-                    child: pw.Text(h,
-                        style: pw.TextStyle(font: bold, fontSize: 9, color: _textMuted)),
-                  )).toList(),
+              children: ['CUSTOMER', 'PHONE', 'BALANCE']
+                  .map((h) => pw.Padding(
+                        padding: const pw.EdgeInsets.all(6),
+                        child: pw.Text(h,
+                            style: pw.TextStyle(
+                                font: bold, fontSize: 9, color: _textMuted)),
+                      ))
+                  .toList(),
             ),
             ...customers.map((c) => pw.TableRow(children: [
-              pw.Padding(padding: const pw.EdgeInsets.all(6),
-                  child: pw.Text(c.name, style: pw.TextStyle(font: font, fontSize: 9))),
-              pw.Padding(padding: const pw.EdgeInsets.all(6),
-                  child: pw.Text(c.phone, style: pw.TextStyle(font: font, fontSize: 9))),
-              pw.Padding(padding: const pw.EdgeInsets.all(6),
-                  child: pw.Text(
-                      AppFormatters.rupee(c.absBalance),
-                      style: pw.TextStyle(
-                          font: bold, fontSize: 9,
-                          color: c.isCreditor ? _successGreen : _dangerRed))),
-            ])),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(c.name,
+                          style: pw.TextStyle(font: font, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(c.phone,
+                          style: pw.TextStyle(font: font, fontSize: 9))),
+                  pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(AppFormatters.rupee(c.absBalance),
+                          style: pw.TextStyle(
+                              font: bold,
+                              fontSize: 9,
+                              color:
+                                  c.isCreditor ? _successGreen : _dangerRed))),
+                ])),
           ],
         ),
       ],

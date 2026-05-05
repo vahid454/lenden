@@ -13,7 +13,7 @@ class TransactionRemoteDataSource {
   TransactionRemoteDataSource({
     required FirebaseFirestore firestore,
     Logger? logger,
-  })  : _db  = firestore,
+  })  : _db = firestore,
         _log = logger ?? Logger();
 
   CollectionReference<Map<String, dynamic>> get _txCol =>
@@ -22,19 +22,22 @@ class TransactionRemoteDataSource {
       _db.collection(AppConstants.colCustomers);
 
   // ── Watch ─────────────────────────────────────────────────────────────────
-  Stream<List<TransactionModel>> watchTransactions(String customerId) {
+  Stream<List<TransactionModel>> watchTransactions({
+    required String customerId,
+    required String userId,
+  }) {
     return _txCol
         .where('customerId', isEqualTo: customerId)
+        .where('userId', isEqualTo: userId)
         .snapshots()
         .handleError((e) => _log.e('watchTransactions error: $e'))
         .map((snap) {
-          final list = snap.docs
-              .map((d) => TransactionModel.fromFirestore(d))
-              .toList();
-          // Client-side sort newest-first — no composite index needed
-          list.sort((a, b) => b.date.compareTo(a.date));
-          return list;
-        });
+      final list =
+          snap.docs.map((d) => TransactionModel.fromFirestore(d)).toList();
+      // Client-side sort newest-first — no composite index needed
+      list.sort((a, b) => b.date.compareTo(a.date));
+      return list;
+    });
   }
 
   // ── Add (atomic) ──────────────────────────────────────────────────────────
@@ -42,18 +45,18 @@ class TransactionRemoteDataSource {
     try {
       late String newId;
       await _db.runTransaction((ftx) async {
-        final txRef   = _txCol.doc();
+        final txRef = _txCol.doc();
         final custRef = _custCol.doc(tx.customerId);
         newId = txRef.id;
         await ftx.get(custRef);
         ftx.set(txRef, tx.toFirestore());
         ftx.update(custRef, {
-          'balance':   FieldValue.increment(tx.balanceDelta),
+          'balance': FieldValue.increment(tx.balanceDelta),
           'updatedAt': FieldValue.serverTimestamp(),
         });
       });
       _log.i('Transaction added: $newId');
-      return tx.copyWith(id: newId) as TransactionModel;
+      return tx.copyWith(id: newId);
     } on FirebaseException catch (e) {
       _log.e('addTransaction: ${e.code}');
       throw AppException('Failed to add entry: ${e.message}', code: e.code);
@@ -67,18 +70,18 @@ class TransactionRemoteDataSource {
   }) async {
     try {
       await _db.runTransaction((ftx) async {
-        final txRef   = _txCol.doc(oldTx.id);
+        final txRef = _txCol.doc(oldTx.id);
         final custRef = _custCol.doc(oldTx.customerId);
         await ftx.get(custRef);
         final netDelta = newTx.balanceDelta - oldTx.balanceDelta;
         ftx.update(txRef, newTx.copyWith(id: oldTx.id).toFirestore());
         ftx.update(custRef, {
-          'balance':   FieldValue.increment(netDelta),
+          'balance': FieldValue.increment(netDelta),
           'updatedAt': FieldValue.serverTimestamp(),
         });
       });
       _log.i('Transaction updated: ${oldTx.id}');
-      return newTx.copyWith(id: oldTx.id) as TransactionModel;
+      return newTx.copyWith(id: oldTx.id);
     } on FirebaseException catch (e) {
       _log.e('updateTransaction: ${e.code}');
       throw AppException('Failed to update entry: ${e.message}', code: e.code);
@@ -89,12 +92,12 @@ class TransactionRemoteDataSource {
   Future<void> deleteTransaction(TransactionEntity tx) async {
     try {
       await _db.runTransaction((ftx) async {
-        final txRef   = _txCol.doc(tx.id);
+        final txRef = _txCol.doc(tx.id);
         final custRef = _custCol.doc(tx.customerId);
         await ftx.get(custRef);
         ftx.delete(txRef);
         ftx.update(custRef, {
-          'balance':   FieldValue.increment(-tx.balanceDelta),
+          'balance': FieldValue.increment(-tx.balanceDelta),
           'updatedAt': FieldValue.serverTimestamp(),
         });
       });
@@ -117,9 +120,8 @@ class TransactionRemoteDataSource {
           .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(from))
           .where('date', isLessThanOrEqualTo: Timestamp.fromDate(to))
           .get();
-      final list = snap.docs
-          .map((d) => TransactionModel.fromFirestore(d))
-          .toList();
+      final list =
+          snap.docs.map((d) => TransactionModel.fromFirestore(d)).toList();
       list.sort((a, b) => b.date.compareTo(a.date));
       return list;
     } on FirebaseException catch (e) {
@@ -131,8 +133,7 @@ class TransactionRemoteDataSource {
           final all = await _txCol.where('userId', isEqualTo: userId).get();
           final list = all.docs
               .map((d) => TransactionModel.fromFirestore(d))
-              .where((t) =>
-                  !t.date.isBefore(from) && !t.date.isAfter(to))
+              .where((t) => !t.date.isBefore(from) && !t.date.isAfter(to))
               .toList();
           list.sort((a, b) => b.date.compareTo(a.date));
           return list;
@@ -145,10 +146,14 @@ class TransactionRemoteDataSource {
   }
 
   // ── Count ─────────────────────────────────────────────────────────────────
-  Future<int> getTransactionCount(String customerId) async {
+  Future<int> getTransactionCount({
+    required String customerId,
+    required String userId,
+  }) async {
     try {
       final snap = await _txCol
           .where('customerId', isEqualTo: customerId)
+          .where('userId', isEqualTo: userId)
           .count()
           .get();
       return snap.count ?? 0;

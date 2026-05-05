@@ -7,8 +7,10 @@ import '../entities/transaction_entity.dart';
 /// Domain and presentation depend ONLY on this — never on Firebase.
 abstract class TransactionRepository {
   /// Real-time stream of transactions for [customerId], newest first.
-  Stream<Either<Failure, List<TransactionEntity>>> watchTransactions(
-      String customerId);
+  Stream<Either<Failure, List<TransactionEntity>>> watchTransactions({
+    required String customerId,
+    required String userId,
+  });
 
   /// Adds a new transaction AND atomically updates the customer balance.
   /// Returns the saved entity with a Firestore-generated ID.
@@ -34,5 +36,8 @@ abstract class TransactionRepository {
   });
 
   /// Returns the count of transactions for a given customer.
-  Future<Either<Failure, int>> getTransactionCount(String customerId);
+  Future<Either<Failure, int>> getTransactionCount({
+    required String customerId,
+    required String userId,
+  });
 }

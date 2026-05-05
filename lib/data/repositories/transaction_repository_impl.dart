@@ -18,15 +18,17 @@ class TransactionRepositoryImpl implements TransactionRepository {
     required TransactionRemoteDataSource remote,
     Logger? logger,
   })  : _remote = remote,
-        _log    = logger ?? Logger();
+        _log = logger ?? Logger();
 
   // ── Watch ─────────────────────────────────────────────────────────────────
 
   @override
-  Stream<Either<Failure, List<TransactionEntity>>> watchTransactions(
-      String customerId) {
+  Stream<Either<Failure, List<TransactionEntity>>> watchTransactions({
+    required String customerId,
+    required String userId,
+  }) {
     return _remote
-        .watchTransactions(customerId)
+        .watchTransactions(customerId: customerId, userId: userId)
         .map<Either<Failure, List<TransactionEntity>>>(Right.new)
         .handleError((e) {
       _log.e('watchTransactions error: $e');
@@ -42,7 +44,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
   Future<Either<Failure, TransactionEntity>> addTransaction(
       TransactionEntity transaction) async {
     try {
-      final model  = TransactionModel.fromEntity(transaction);
+      final model = TransactionModel.fromEntity(transaction);
       final result = await _remote.addTransaction(model);
       return Right(result);
     } on AppException catch (e) {
@@ -104,8 +106,8 @@ class TransactionRepositoryImpl implements TransactionRepository {
     try {
       final results = await _remote.getTransactionsByDateRange(
         userId: userId,
-        from:   from,
-        to:     to,
+        from: from,
+        to: to,
       );
       return Right(results);
     } on AppException catch (e) {
@@ -120,9 +122,15 @@ class TransactionRepositoryImpl implements TransactionRepository {
   // ── Count ─────────────────────────────────────────────────────────────────
 
   @override
-  Future<Either<Failure, int>> getTransactionCount(String customerId) async {
+  Future<Either<Failure, int>> getTransactionCount({
+    required String customerId,
+    required String userId,
+  }) async {
     try {
-      final count = await _remote.getTransactionCount(customerId);
+      final count = await _remote.getTransactionCount(
+        customerId: customerId,
+        userId: userId,
+      );
       return Right(count);
     } on AppException catch (e) {
       return Left(ServerFailure(e.message));

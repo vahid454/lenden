@@ -13,8 +13,11 @@ class WatchTransactionsUseCase {
   final TransactionRepository _repo;
   const WatchTransactionsUseCase(this._repo);
 
-  Stream<Either<Failure, List<TransactionEntity>>> call(String customerId) =>
-      _repo.watchTransactions(customerId);
+  Stream<Either<Failure, List<TransactionEntity>>> call({
+    required String customerId,
+    required String userId,
+  }) =>
+      _repo.watchTransactions(customerId: customerId, userId: userId);
 }
 
 /// Adds a transaction and updates the customer balance atomically.
@@ -69,6 +72,9 @@ class GetTransactionCountUseCase {
   final TransactionRepository _repo;
   const GetTransactionCountUseCase(this._repo);
 
-  Future<Either<Failure, int>> call(String customerId) =>
-      _repo.getTransactionCount(customerId);
+  Future<Either<Failure, int>> call({
+    required String customerId,
+    required String userId,
+  }) =>
+      _repo.getTransactionCount(customerId: customerId, userId: userId);
 }

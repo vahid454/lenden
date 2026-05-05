@@ -54,12 +54,15 @@ final getTransactionsByDateRangeUseCaseProvider =
 final transactionsStreamProvider =
     StreamProvider.family<List<TransactionEntity>, String>(
         (ref, customerId) async* {
-  // Guard: don't subscribe with empty id
-  if (customerId.isEmpty) {
+  final userId = ref.watch(currentUserProvider)?.id;
+
+  // Guard: don't subscribe with empty ids
+  if (customerId.isEmpty || userId == null || userId.isEmpty) {
+    yield [];
     return;
   }
   final useCase = ref.watch(watchTransactionsUseCaseProvider);
-  await for (final either in useCase(customerId)) {
+  await for (final either in useCase(customerId: customerId, userId: userId)) {
     yield either.fold((_) => <TransactionEntity>[], (list) => list);
   }
 });

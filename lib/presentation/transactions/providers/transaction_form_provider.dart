@@ -82,7 +82,6 @@ class TransactionFormNotifier extends StateNotifier<TransactionFormState> {
         return null;
       },
       (savedTransaction) {
-        _ref.invalidate(transactionsStreamProvider(customerId));
         _ref.invalidate(customersStreamProvider);
         state = state.copyWith(isLoading: false, isSuccess: true);
         return savedTransaction;
@@ -120,7 +119,6 @@ class TransactionFormNotifier extends StateNotifier<TransactionFormState> {
         return null;
       },
       (savedTransaction) {
-        _ref.invalidate(transactionsStreamProvider(existing.customerId));
         _ref.invalidate(customersStreamProvider);
         state = state.copyWith(isLoading: false, isSuccess: true);
         return savedTransaction;
