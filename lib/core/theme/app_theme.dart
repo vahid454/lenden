@@ -71,18 +71,26 @@ class AppTheme {
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        elevation: 4,
+        elevation: 6,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
         ),
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.surface,
         selectedItemColor: AppColors.primary,
         unselectedItemColor: AppColors.textSecondary,
-        elevation: 8,
+        elevation: 12,
         type: BottomNavigationBarType.fixed,
         showUnselectedLabels: true,
+        selectedLabelStyle: GoogleFonts.poppins(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+        unselectedLabelStyle: GoogleFonts.poppins(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
       ),
       dividerTheme: const DividerThemeData(
         color: AppColors.border,
@@ -91,7 +99,12 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        contentTextStyle: GoogleFonts.poppins(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        elevation: 8,
       ),
     );
   }
@@ -131,18 +144,26 @@ class AppTheme {
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: primaryDark,
         foregroundColor: Colors.black,
-        elevation: 4,
+        elevation: 6,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderRadius: BorderRadius.all(Radius.circular(18)),
         ),
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.darkSurface,
         selectedItemColor: primaryDark,
         unselectedItemColor: AppColors.darkTextSecondary,
-        elevation: 8,
+        elevation: 12,
         type: BottomNavigationBarType.fixed,
         showUnselectedLabels: true,
+        selectedLabelStyle: GoogleFonts.poppins(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+        unselectedLabelStyle: GoogleFonts.poppins(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
       ),
       dividerTheme: const DividerThemeData(
         color: AppColors.darkBorder,
@@ -151,10 +172,12 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.darkSurfaceVariant,
-        contentTextStyle:
-            GoogleFonts.poppins(color: AppColors.darkTextPrimary),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        contentTextStyle: GoogleFonts.poppins(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        elevation: 8,
       ),
     );
   }
@@ -174,7 +197,7 @@ class AppTheme {
       titleSmall:    GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: base),
       bodyLarge:     GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w400, color: base),
       bodyMedium:    GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w400, color: base),
-      bodySmall:     GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w400, color: base.withOpacity(0.7)),
+      bodySmall:     GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w400, color: base.withValues(alpha: 0.7)),
       labelLarge:    GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: base),
       labelMedium:   GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: base),
       labelSmall:    GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w500, color: base),
@@ -217,14 +240,15 @@ class AppTheme {
       style: ElevatedButton.styleFrom(
         backgroundColor: primary,
         foregroundColor: Colors.white,
-        elevation: 0,
-        minimumSize: const Size(double.infinity, 54),
+        elevation: 2,
+        minimumSize: const Size(double.infinity, 56),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
         ),
         textStyle: GoogleFonts.poppins(
           fontSize: 16,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           letterSpacing: 0.3,
         ),
       ),
@@ -235,14 +259,15 @@ class AppTheme {
     return OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: primary,
-        minimumSize: const Size(double.infinity, 54),
+        minimumSize: const Size(double.infinity, 56),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
         ),
         side: BorderSide(color: primary, width: 1.5),
         textStyle: GoogleFonts.poppins(
           fontSize: 16,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

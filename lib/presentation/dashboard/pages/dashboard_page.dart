@@ -41,10 +41,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           Expanded(
             child: IndexedStack(
               index: _navIndex,
-              children: [
-                const _HomeTab(),
-                const ReportsPage(),
-                const CashbookPage(),
+              children: const [
+                _HomeTab(),
+                ReportsPage(),
+                CashbookPage(),
                 ProfileTab(),
               ],
             ),
@@ -59,7 +59,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   AppBar _buildAppBar(BuildContext context, WidgetRef ref, String name) {
     final titles = ['Home', 'Reports', 'CashBook', 'Profile'];
     return AppBar(
-      toolbarHeight: 74,
+      toolbarHeight: 76,
       title: _navIndex == 0
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,19 +67,24 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               children: [
                 Text('Hello, ${name.split(' ').first}',
                     style: GoogleFonts.poppins(
-                        fontSize: 22, fontWeight: FontWeight.w700)),
-                Text('Track lending with confidence',
+                        fontSize: 24, 
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5)),
+                Text('Track your accounts with confidence',
                     style: GoogleFonts.poppins(
-                        fontSize: 12,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
                         color: Theme.of(context)
                             .colorScheme
                             .onSurface
-                            .withOpacity(0.5))),
+                            .withValues(alpha: 0.55))),
               ],
             )
           : Text(titles[_navIndex],
               style: GoogleFonts.poppins(
-                  fontSize: 22, fontWeight: FontWeight.w700)),
+                  fontSize: 22, 
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5)),
       actions: [
         if (_navIndex == 0)
           Tooltip(
@@ -91,7 +96,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 icon: const Icon(Icons.search_rounded, size: 18),
                 label: Text(
                   'Search',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 style: FilledButton.styleFrom(
                   visualDensity: VisualDensity.compact,
@@ -138,10 +144,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 
   Widget _buildFab(BuildContext context) {
-    return FloatingActionButton(
-      heroTag: 'dashboard_fab',
-      onPressed: () => context.push(AppRoutes.addCustomer),
-      child: const Icon(Icons.person_add_alt_1_rounded),
+    return Tooltip(
+      message: 'Add New Customer',
+      child: FloatingActionButton(
+        heroTag: 'dashboard_fab',
+        onPressed: () => context.push(AppRoutes.addCustomer),
+        tooltip: 'Add New Customer',
+        child: const Icon(Icons.person_add_alt_1_rounded),
+      ),
     );
   }
 }
@@ -153,18 +163,20 @@ class _OfflineBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       color: AppColors.warningAmber,
       child: Row(
         children: [
-          const Icon(Icons.wifi_off_rounded, size: 16, color: Colors.black87),
-          const SizedBox(width: 8),
-          Text(
-            'You\'re offline. Showing cached data.',
-            style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87),
+          const Icon(Icons.wifi_off_rounded, size: 18, color: Colors.black87),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'You\'re offline. Showing cached data.',
+              style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black87),
+            ),
           ),
         ],
       ),
@@ -246,20 +258,21 @@ class _HomeTab extends ConsumerWidget {
           // ── Section heading ──────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 28, 16, 10),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Customers',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700)),
+                  Text('All Customers',
+                      style: GoogleFonts.poppins(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3)),
                   TextButton(
                     onPressed: () => context.push(AppRoutes.customers),
                     child: Text('See All',
                         style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600, fontSize: 13)),
+                            fontWeight: FontWeight.w600, 
+                            fontSize: 13)),
                   ),
                 ],
               ).animate().fadeIn(delay: 200.ms),
@@ -291,14 +304,18 @@ class _HomeTab extends ConsumerWidget {
                 delegate: SliverChildBuilderDelegate((ctx, i) {
                   if (i == preview.length) {
                     return Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                       child: OutlinedButton(
                         onPressed: () => context.push(AppRoutes.customers),
                         style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 44)),
+                            minimumSize: const Size(double.infinity, 48),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            )),
                         child: Text('View all ${visibleCustomers.length} customers',
                             style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w600)),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14)),
                       ),
                     );
                   }
@@ -361,8 +378,8 @@ class _NetBalanceHero extends StatelessWidget {
     final isPositive = net >= 0;
     final start = isPositive ? cs.primary : AppColors.danger;
     final end = isPositive
-        ? cs.primary.withOpacity(0.72)
-        : AppColors.danger.withOpacity(0.72);
+        ? cs.primary.withValues(alpha: 0.72)
+        : AppColors.danger.withValues(alpha: 0.72);
 
     return Container(
       width: double.infinity,
@@ -376,7 +393,7 @@ class _NetBalanceHero extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: start.withOpacity(0.28),
+            color: start.withValues(alpha: 0.28),
             blurRadius: 24,
             offset: const Offset(0, 12),
           )
@@ -391,7 +408,7 @@ class _NetBalanceHero extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.14),
+                  color: Colors.white.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -448,7 +465,7 @@ class _NetChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.18),
+            color: Colors.white.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(20)),
         child: Text(label,
             style: GoogleFonts.poppins(
@@ -499,7 +516,7 @@ class _SummaryChip extends StatelessWidget {
             style: GoogleFonts.poppins(
                 fontSize: 11,
                 color:
-                    Theme.of(context).colorScheme.onSurface.withOpacity(0.5))),
+                    Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
       ]),
     );
   }
@@ -582,7 +599,7 @@ class _InsightPill extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: color, size: 16),
@@ -594,7 +611,7 @@ class _InsightPill extends StatelessWidget {
             style: GoogleFonts.poppins(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.72),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.72),
               height: 1.35,
             ),
           ),
@@ -626,9 +643,9 @@ class _EmptyHomeState extends StatelessWidget {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-                color: cs.primary.withOpacity(0.08), shape: BoxShape.circle),
+                color: cs.primary.withValues(alpha: 0.08), shape: BoxShape.circle),
             child: Icon(Icons.group_outlined,
-                size: 36, color: cs.primary.withOpacity(0.5)),
+                size: 36, color: cs.primary.withValues(alpha: 0.5)),
           ).animate().scale(curve: Curves.elasticOut),
           const SizedBox(height: 20),
           Text('No customers yet',
@@ -640,7 +657,7 @@ class _EmptyHomeState extends StatelessWidget {
           Text('Add your first customer to start tracking udhar.',
                   style: GoogleFonts.poppins(
                       fontSize: 13,
-                      color: cs.onSurface.withOpacity(0.5),
+                      color: cs.onSurface.withValues(alpha: 0.5),
                       height: 1.5),
                   textAlign: TextAlign.center)
               .animate()

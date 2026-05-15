@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -104,7 +105,11 @@ class CashbookNotifier extends StateNotifier<CashbookState> {
     _ref.onDispose(() => _subscription?.cancel());
   }
 
-  String? get _uid => _ref.read(currentUserProvider)?.id;
+  String? get _uid {
+    final profileUid = _ref.read(currentUserProvider)?.id;
+    if (profileUid != null && profileUid.isNotEmpty) return profileUid;
+    return FirebaseAuth.instance.currentUser?.uid;
+  }
 
   Future<void> _watch() async {
     final uid = _uid;
@@ -116,24 +121,27 @@ class CashbookNotifier extends StateNotifier<CashbookState> {
     await _subscription?.cancel();
     state = state.copyWith(isLoading: true, clearError: true);
     final dateStr = DateFormat('yyyy-MM-dd').format(state.selectedDate);
+
+    // Use only userId filter — avoids composite index requirement.
+    // Filter by date client-side so it works without any Firestore index.
     _subscription = FirebaseFirestore.instance
         .collection(_col)
         .where('userId', isEqualTo: uid)
-        .where('yearMonthDay', isEqualTo: dateStr)
         .snapshots()
         .listen((snap) {
       final entries = snap.docs
           .map((d) => CashEntry.fromMap(d.id, d.data()))
+          .where((e) => DateFormat('yyyy-MM-dd').format(e.date) == dateStr)
           .toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       if (mounted) {
         state = state.copyWith(isLoading: false, entries: entries);
       }
-    }, onError: (_) {
+    }, onError: (e) {
       if (mounted) {
         state = state.copyWith(
           isLoading: false,
-          error: 'Failed to load cashbook.',
+          error: 'Failed to load cashbook. Check your connection.',
         );
       }
     });
@@ -150,24 +158,54 @@ class CashbookNotifier extends StateNotifier<CashbookState> {
     String? note,
   }) async {
     final uid = _uid;
-    if (uid == null || uid.isEmpty) return false;
-    try {
-      final now = DateTime.now();
-      final map = CashEntry(
-        id: '',
-        userId: uid,
-        type: type,
-        amount: amount,
-        note: note,
-        date: state.selectedDate,
-        createdAt: now,
-      ).toMap();
-      await FirebaseFirestore.instance.collection(_col).add(map);
-      return true;
-    } catch (_) {
-      state = state.copyWith(error: 'Failed to save entry.');
+    if (uid == null || uid.isEmpty) {
+      state = state.copyWith(error: 'User not authenticated. Please log in again.');
       return false;
     }
+
+    final now = DateTime.now();
+    final map = CashEntry(
+      id: '',
+      userId: uid,
+      type: type,
+      amount: amount,
+      note: note,
+      date: state.selectedDate,
+      createdAt: now,
+    ).toMap();
+
+    int attempt = 0;
+    while (attempt < 2) {
+      try {
+        if (attempt > 0) {
+          // Refresh auth token before retrying permission-denied writes.
+          await FirebaseAuth.instance.currentUser?.getIdToken(true);
+        }
+        await FirebaseFirestore.instance.collection(_col).add(map);
+        state = state.copyWith(clearError: true);
+        return true;
+      } on FirebaseException catch (e) {
+        attempt += 1;
+        if (e.code == 'permission-denied' && attempt < 2) {
+          continue;
+        }
+        String errorMsg = 'Failed to save entry. Please try again.';
+        if (e.code == 'permission-denied') {
+          errorMsg = 'Permission denied. Check your account settings or Firestore rules.';
+        } else if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
+          errorMsg = 'Network error. Check your internet connection.';
+        } else if (e.code == 'resource-exhausted') {
+          errorMsg = 'Storage quota exceeded. Please delete old entries.';
+        }
+        state = state.copyWith(error: errorMsg);
+        return false;
+      } catch (e) {
+        state = state.copyWith(error: 'Failed to save entry. Please try again.');
+        return false;
+      }
+    }
+    state = state.copyWith(error: 'Failed to save entry. Please try again.');
+    return false;
   }
 
   Future<List<CashEntry>> getEntriesByRange({

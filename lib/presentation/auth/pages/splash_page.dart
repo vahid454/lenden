@@ -66,36 +66,48 @@ class _SplashPageState extends ConsumerState<SplashPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 90, height: 90,
+              width: 100, height: 100,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 32, offset: const Offset(0, 12),
-                )],
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 40, 
+                    offset: const Offset(0, 16),
+                  ),
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(-2, -2),
+                  ),
+                ],
               ),
               child: Center(
                 child: Text('₹', style: GoogleFonts.poppins(
-                    fontSize: 46, fontWeight: FontWeight.w700,
-                    color: cs.primary)),
+                    fontSize: 54, fontWeight: FontWeight.w800,
+                    color: cs.primary,
+                    height: 1)),
               ),
             )
                 .animate()
-                .scale(begin: const Offset(0.5, 0.5),
-                    curve: Curves.elasticOut, duration: 800.ms)
+                .scale(begin: const Offset(0.4, 0.4),
+                    curve: Curves.elasticOut, duration: 900.ms)
                 .fadeIn(duration: 400.ms),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
             Text('LenDen', style: GoogleFonts.poppins(
-                fontSize: 40, fontWeight: FontWeight.w700,
-                color: Colors.white, letterSpacing: -1))
+                fontSize: 42, fontWeight: FontWeight.w800,
+                color: Colors.white, letterSpacing: -1.2))
                 .animate()
                 .fadeIn(delay: 300.ms, duration: 500.ms)
                 .slideY(begin: 0.3, end: 0, curve: Curves.easeOut),
-            const SizedBox(height: 8),
-            Text('Apna hisaab, apni marzi',
+            const SizedBox(height: 12),
+            Text('Your accounts, in your hands',
                 style: GoogleFonts.poppins(
-                    fontSize: 14, color: Colors.white.withOpacity(0.7)))
+                    fontSize: 16, 
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.8),
+                    letterSpacing: 0.3))
                 .animate().fadeIn(delay: 500.ms),
             const SizedBox(height: 60),
             SizedBox(
@@ -103,7 +115,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
               child: CircularProgressIndicator(
                 strokeWidth: 2.5,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                    Colors.white.withOpacity(0.55)),
+                    Colors.white.withValues(alpha: 0.55)),
               ),
             ).animate().fadeIn(delay: 700.ms),
           ],

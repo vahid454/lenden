@@ -39,7 +39,7 @@ class _CashbookPageState extends ConsumerState<CashbookPage> {
                 ? 'Today'
                 : DateFormat('d MMM yyyy').format(state.selectedDate),
             style: GoogleFonts.poppins(
-                fontSize: 11, color: cs.onSurface.withOpacity(0.5)),
+                fontSize: 11, color: cs.onSurface.withValues(alpha: 0.5)),
           ),
         ]),
         actions: [
@@ -202,7 +202,7 @@ class _CashbookExportSheet extends StatelessWidget {
             const Spacer(),
             Text(DateFormat('d MMM yyyy').format(selectedDate),
                 style: GoogleFonts.poppins(
-                    fontSize: 12, color: cs.onSurface.withOpacity(0.48))),
+                    fontSize: 12, color: cs.onSurface.withValues(alpha: 0.48))),
           ]),
           const SizedBox(height: 14),
           _ExportOption(
@@ -258,7 +258,7 @@ class _ExportOption extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: cs.primary.withOpacity(0.1),
+              color: cs.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: cs.primary, size: 20),
@@ -273,11 +273,11 @@ class _ExportOption extends StatelessWidget {
               const SizedBox(height: 2),
               Text(subtitle,
                   style: GoogleFonts.poppins(
-                      fontSize: 11, color: cs.onSurface.withOpacity(0.48))),
+                      fontSize: 11, color: cs.onSurface.withValues(alpha: 0.48))),
             ]),
           ),
           Icon(Icons.chevron_right_rounded,
-              color: cs.onSurface.withOpacity(0.34)),
+              color: cs.onSurface.withValues(alpha: 0.34)),
         ]),
       ),
     );
@@ -296,94 +296,130 @@ class _DailySummary extends StatelessWidget {
     final bal = state.balance;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      padding: const EdgeInsets.all(18),
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [cs.primary, cs.primary.withOpacity(0.75)],
+          colors: [cs.primary, cs.primary.withValues(alpha: 0.8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: cs.primary.withOpacity(0.28),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: cs.primary.withValues(alpha: 0.3),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           )
         ],
       ),
-      child: Column(children: [
-        // Galla balance
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(
-              child: Column(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Balance amount - prominent
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('बाकी रकम',
+                  style: GoogleFonts.poppins(
+                      fontSize: 13, 
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontWeight: FontWeight.w500)),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  AppFormatters.rupee(bal.abs()),
+                  maxLines: 1,
+                  style: GoogleFonts.poppins(
+                      fontSize: 36,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      height: 1),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: bal >= 0 ? AppColors.success : AppColors.danger,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    bal >= 0 ? 'Cash in hand' : 'Cash shortage',
+                    style: GoogleFonts.poppins(
+                        fontSize: 12, 
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Stats row
+          Row(
+            children: [
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                Text('Galla Balance',
-                    style: GoogleFonts.poppins(
-                        fontSize: 12, color: Colors.white70)),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    AppFormatters.rupee(bal.abs()),
-                    maxLines: 1,
-                    style: GoogleFonts.poppins(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        height: 1),
-                  ),
+                    Text('Gave ↓',
+                        style: GoogleFonts.poppins(
+                            fontSize: 11, 
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 4),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        AppFormatters.rupee(state.totalOut),
+                        style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white),
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  bal >= 0 ? '↑ Cash in hand' : '↓ Cash short',
-                  style:
-                      GoogleFonts.poppins(fontSize: 11, color: Colors.white70),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Received ↑',
+                        style: GoogleFonts.poppins(
+                            fontSize: 11, 
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 4),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        AppFormatters.rupee(state.totalIn),
+                        style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white),
+                      ),
+                    ),
+                  ],
                 ),
-              ])),
-          const SizedBox(width: 12),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            _PillStat('+${AppFormatters.rupee(state.totalIn)}', 'Cash In',
-                AppColors.success),
-            const SizedBox(height: 8),
-            _PillStat('-${AppFormatters.rupee(state.totalOut)}', 'Cash Out',
-                AppColors.danger),
-          ]),
-        ]),
-      ]),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
-}
-
-class _PillStat extends StatelessWidget {
-  final String value, label;
-  final Color color;
-  const _PillStat(this.value, this.label, this.color);
-
-  @override
-  Widget build(BuildContext context) => Container(
-        constraints: const BoxConstraints(minWidth: 106, maxWidth: 136),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.18),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerRight,
-            child: Text(value,
-                maxLines: 1,
-                style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white)),
-          ),
-          Text(label,
-              style: GoogleFonts.poppins(fontSize: 10, color: Colors.white70)),
-        ]),
-      );
 }
 
 // ── Entry List ────────────────────────────────────────────────────────────────
@@ -398,53 +434,52 @@ class _EntryList extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(children: [
-      // Column headers
+      // Column headers with better styling
       Container(
-        margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
         decoration: BoxDecoration(
-          color:
-              isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(8),
+          color: isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-              color: isDark ? AppColors.darkBorder : AppColors.border),
+              color: isDark ? AppColors.darkBorder : AppColors.border, width: 0.8),
         ),
         child: Row(children: [
           Expanded(
               flex: 4,
-              child: Text('TIME / NOTE',
+              child: Text('DETAILS',
                   style: GoogleFonts.poppins(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: cs.onSurface.withOpacity(0.45),
-                      letterSpacing: 0.8))),
+                      color: cs.onSurface.withValues(alpha: 0.5),
+                      letterSpacing: 0.5))),
           const SizedBox(width: 1),
           Expanded(
               flex: 3,
-              child: Text('CASH IN',
+              child: Text('RECEIVED',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.success.withOpacity(0.8),
-                      letterSpacing: 0.8))),
+                      color: AppColors.success.withValues(alpha: 0.75),
+                      letterSpacing: 0.5))),
           const SizedBox(width: 1),
           Expanded(
               flex: 3,
-              child: Text('CASH OUT',
+              child: Text('GAVE',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.danger.withOpacity(0.8),
-                      letterSpacing: 0.8))),
+                      color: AppColors.danger.withValues(alpha: 0.75),
+                      letterSpacing: 0.5))),
         ]),
       ),
 
-      // Entries
+      // Entries with improved design
       Expanded(
         child: ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           itemCount: state.entries.length,
           itemBuilder: (ctx, i) {
             final e = state.entries[i];
@@ -469,36 +504,46 @@ class _EntryRow extends StatelessWidget {
     final time = DateFormat('h:mm a').format(entry.createdAt);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
+      margin: const EdgeInsets.only(bottom: 7),
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(10),
-        border:
-            Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: isDark ? AppColors.darkBorder : AppColors.border, 
+            width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: isDark 
+              ? Colors.black.withValues(alpha: 0.1) 
+              : Colors.grey.withValues(alpha: 0.08),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: IntrinsicHeight(
         child: Row(children: [
-          // Time + note
+          // Time + note with better spacing
           Expanded(
               flex: 4,
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(time,
                         style: GoogleFonts.poppins(
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: cs.onSurface.withOpacity(0.65))),
+                            color: cs.onSurface.withValues(alpha: 0.7))),
                     if (entry.note?.isNotEmpty == true) ...[
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(entry.note!,
                           style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              color: cs.onSurface.withOpacity(0.45)),
+                              fontSize: 12,
+                              color: cs.onSurface.withValues(alpha: 0.5),
+                              fontWeight: FontWeight.w400),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis),
                     ],
@@ -508,6 +553,7 @@ class _EntryRow extends StatelessWidget {
           // Divider
           VerticalDivider(
               width: 1,
+              thickness: 0.8,
               color: isDark ? AppColors.darkBorder : AppColors.border),
           // Cash In
           Expanded(
@@ -521,7 +567,7 @@ class _EntryRow extends StatelessWidget {
                           child: Text('₹$fmt',
                               maxLines: 1,
                               style: GoogleFonts.poppins(
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.success),
                               textAlign: TextAlign.center),
@@ -529,12 +575,15 @@ class _EntryRow extends StatelessWidget {
                       )
                     : Text('—',
                         style: GoogleFonts.poppins(
-                            fontSize: 13, color: cs.onSurface.withOpacity(0.2)),
+                            fontSize: 13, 
+                            color: cs.onSurface.withValues(alpha: 0.15),
+                            fontWeight: FontWeight.w400),
                         textAlign: TextAlign.center),
               )),
           // Divider
           VerticalDivider(
               width: 1,
+              thickness: 0.8,
               color: isDark ? AppColors.darkBorder : AppColors.border),
           // Cash Out
           Expanded(
@@ -548,7 +597,7 @@ class _EntryRow extends StatelessWidget {
                           child: Text('₹$fmt',
                               maxLines: 1,
                               style: GoogleFonts.poppins(
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.danger),
                               textAlign: TextAlign.center),
@@ -556,14 +605,16 @@ class _EntryRow extends StatelessWidget {
                       )
                     : Text('—',
                         style: GoogleFonts.poppins(
-                            fontSize: 13, color: cs.onSurface.withOpacity(0.2)),
+                            fontSize: 13, 
+                            color: cs.onSurface.withValues(alpha: 0.15),
+                            fontWeight: FontWeight.w400),
                         textAlign: TextAlign.center),
               )),
         ]),
       ),
     )
-        .animate(delay: Duration(milliseconds: index * 30))
-        .fadeIn(duration: 200.ms);
+        .animate(delay: Duration(milliseconds: index * 25))
+        .fadeIn(duration: 250.ms);
   }
 }
 
@@ -583,9 +634,14 @@ class _QuickEntryFabState extends State<_QuickEntryFab> {
     return FloatingActionButton.extended(
       heroTag: 'cashbook_fab',
       onPressed: widget.onAdd,
-      icon: const Icon(Icons.add_rounded),
+      icon: const Icon(Icons.add_rounded, size: 20),
       label: Text('Add Entry',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+          style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w600, 
+              fontSize: 14)),
+      backgroundColor: Theme.of(context).colorScheme.primary,
+      foregroundColor: Colors.white,
+      elevation: 6,
     );
   }
 }
@@ -644,11 +700,24 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
     if (ok && mounted) {
       HapticFeedback.mediumImpact();
       Navigator.of(context).pop();
+      // Show success feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_type == CashType.cashIn ? "Cash In" : "Cash Out"} recorded successfully'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Could not save entry. Please try again.'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      final error = ref.read(cashbookProvider).error ?? 'Could not save entry. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
   }
 
@@ -665,10 +734,10 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
         maxHeight: MediaQuery.of(context).size.height * 0.92,
       ),
       padding: EdgeInsets.fromLTRB(
-          20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 16),
+          20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SafeArea(
         top: false,
@@ -677,21 +746,29 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
             // Handle
             Center(
                 child: Container(
-                    width: 40,
+                    width: 44,
                     height: 4,
                     decoration: BoxDecoration(
-                        color: AppColors.border,
-                        borderRadius: BorderRadius.circular(4)))),
-            const SizedBox(height: 16),
+                        color: isDark ? AppColors.darkBorder : AppColors.border,
+                        borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 18),
+            
+            // Title
+            Text('Add Entry',
+                style: GoogleFonts.poppins(
+                    fontSize: 20, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 20),
 
-            // Type toggle
+            // Type toggle with better design
             Container(
-              height: 64,
+              height: 70,
               decoration: BoxDecoration(
-                color: isDark
-                    ? AppColors.darkSurfaceVariant
-                    : AppColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(12),
+                color: isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isDark ? AppColors.darkBorder : AppColors.border,
+                  width: 0.8,
+                ),
               ),
               child: Row(children: [
                 Expanded(
@@ -699,29 +776,29 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
                   onTap: () => setState(() => _type = CashType.cashIn),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
-                    margin: const EdgeInsets.all(4),
+                    margin: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
                       color: _type == CashType.cashIn
                           ? AppColors.success
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.south_west_rounded,
-                              size: 18,
+                          Icon(Icons.call_received_rounded,
+                              size: 20,
                               color: _type == CashType.cashIn
                                   ? Colors.white
-                                  : AppColors.success.withOpacity(0.7)),
-                          const SizedBox(height: 2),
-                          Text('Cash In',
+                                  : AppColors.success.withValues(alpha: 0.6)),
+                          const SizedBox(height: 3),
+                          Text('Received',
                               style: GoogleFonts.poppins(
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: _type == CashType.cashIn
                                       ? Colors.white
-                                      : AppColors.success.withOpacity(0.7))),
+                                      : AppColors.success.withValues(alpha: 0.6))),
                         ]),
                   ),
                 )),
@@ -730,49 +807,50 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
                   onTap: () => setState(() => _type = CashType.cashOut),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
-                    margin: const EdgeInsets.all(4),
+                    margin: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
                       color: _type == CashType.cashOut
                           ? AppColors.danger
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.north_east_rounded,
-                              size: 18,
+                          Icon(Icons.call_made_rounded,
+                              size: 20,
                               color: _type == CashType.cashOut
                                   ? Colors.white
-                                  : AppColors.danger.withOpacity(0.7)),
-                          const SizedBox(height: 2),
-                          Text('Cash Out',
+                                  : AppColors.danger.withValues(alpha: 0.6)),
+                          const SizedBox(height: 3),
+                          Text('Gave',
                               style: GoogleFonts.poppins(
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: _type == CashType.cashOut
                                       ? Colors.white
-                                      : AppColors.danger.withOpacity(0.7))),
+                                      : AppColors.danger.withValues(alpha: 0.6))),
                         ]),
                   ),
                 )),
               ]),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
-            // Amount
+            // Amount with better styling
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurface : AppColors.surface,
+                color: isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: accent.withOpacity(0.35), width: 1.5),
+                border: Border.all(
+                    color: accent.withValues(alpha: 0.3), width: 1.5),
               ),
               child: Row(children: [
                 Text('₹',
                     style: GoogleFonts.poppins(
-                        fontSize: 26,
+                        fontSize: 28,
                         fontWeight: FontWeight.w700,
                         color: accent)),
                 const SizedBox(width: 8),
@@ -784,16 +862,16 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   style: GoogleFonts.poppins(
-                      fontSize: 26, fontWeight: FontWeight.w700, color: accent),
+                      fontSize: 28, fontWeight: FontWeight.w700, color: accent),
                   inputFormatters: [
                     _AmountInputFormatter(),
                   ],
                   decoration: InputDecoration(
                     hintText: '0',
                     hintStyle: GoogleFonts.poppins(
-                        fontSize: 26,
+                        fontSize: 28,
                         fontWeight: FontWeight.w700,
-                        color: accent.withOpacity(0.2)),
+                        color: accent.withValues(alpha: 0.15)),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.zero,
                   ),
@@ -802,62 +880,76 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
               ]),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
-            // Note
+            // Note with better styling
             TextField(
               controller: _noteCtrl,
               maxLength: 80,
-              style: GoogleFonts.poppins(fontSize: 14),
+              style: GoogleFonts.poppins(fontSize: 15),
               decoration: InputDecoration(
                 counterText: '',
                 hintText: 'Note (optional)',
                 hintStyle: GoogleFonts.poppins(
-                    fontSize: 13, color: cs.onSurface.withOpacity(0.35)),
+                    fontSize: 14, 
+                    color: cs.onSurface.withValues(alpha: 0.4),
+                    fontWeight: FontWeight.w400),
                 filled: true,
                 fillColor: isDark
                     ? AppColors.darkSurfaceVariant
                     : AppColors.surfaceVariant,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: isDark ? AppColors.darkBorder : AppColors.border,
+                    width: 0.8,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: accent,
+                    width: 1.5,
+                  ),
                 ),
                 contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
-            // Save
+            // Save button with better styling
             SizedBox(
               width: double.infinity,
-              height: 52,
+              height: 56,
               child: ElevatedButton.icon(
                 onPressed: _loading ? null : _save,
                 icon: _loading
                     ? const SizedBox(
-                        width: 16,
-                        height: 16,
+                        width: 18,
+                        height: 18,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
+                            strokeWidth: 2.2, color: Colors.white))
                     : Icon(
                         isCashIn
-                            ? Icons.arrow_downward_rounded
-                            : Icons.arrow_upward_rounded,
-                        size: 18),
-                label: Text('Record $label',
+                            ? Icons.call_received_rounded
+                            : Icons.call_made_rounded,
+                        size: 20),
+                label: Text(_loading ? 'Saving...' : 'Record $label',
                     style: GoogleFonts.poppins(
-                        fontSize: 15, fontWeight: FontWeight.w700)),
+                        fontSize: 16, fontWeight: FontWeight.w700)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: accent,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
+                backgroundColor: accent,
+                foregroundColor: Colors.white,
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                disabledBackgroundColor: accent.withValues(alpha: 0.4),
               ),
             ),
+            ),
+            const SizedBox(height: 8),
           ]),
         ),
       ),
@@ -888,15 +980,20 @@ class _EmptyState extends StatelessWidget {
     return Center(
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(Icons.account_balance_wallet_outlined,
-            size: 56, color: cs.onSurface.withOpacity(0.18)),
-        const SizedBox(height: 16),
+            size: 64, color: cs.onSurface.withValues(alpha: 0.15)),
+        const SizedBox(height: 20),
         Text('No entries today',
-            style:
-                GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
-        Text('Tap + Add Entry to record cash in or out.',
             style: GoogleFonts.poppins(
-                fontSize: 13, color: cs.onSurface.withOpacity(0.45))),
+                fontSize: 18, 
+                fontWeight: FontWeight.w700,
+                color: cs.onSurface.withValues(alpha: 0.8))),
+        const SizedBox(height: 10),
+        Text('Tap the Add Entry button to get started',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+                fontSize: 14, 
+                color: cs.onSurface.withValues(alpha: 0.5),
+                fontWeight: FontWeight.w400)),
       ]),
     );
   }
