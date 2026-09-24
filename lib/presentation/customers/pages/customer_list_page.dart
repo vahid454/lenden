@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/providers/auth_providers.dart';
 import '../../../core/providers/customer_providers.dart';
+import '../../../core/providers/payment_promise_providers.dart';
 import '../../../core/router/app_router.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../common/widgets/common_widgets.dart';
@@ -23,7 +24,7 @@ class CustomerListPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final customersAsync = ref.watch(customersStreamProvider);
     final sharedCustomersAsync = ref.watch(sharedCustomersStreamProvider);
-    final visibleCustomers = ref.watch(visibleCustomersProvider);
+    final filteredCustomers = ref.watch(filteredCustomersByPromiseProvider);
     final listState = ref.watch(customerListProvider);
 
     return Scaffold(
@@ -42,6 +43,8 @@ class CustomerListPage extends ConsumerWidget {
             ),
           ).animate().fadeIn(duration: 300.ms),
 
+          _PromiseFilterBar().animate().fadeIn(delay: 80.ms),
+
           // ── Error Banner ───────────────────────────────────────────────
           if (listState.errorMessage != null)
             Padding(
@@ -58,7 +61,7 @@ class CustomerListPage extends ConsumerWidget {
                     ref,
                     customersAsync: customersAsync,
                     sharedCustomersAsync: sharedCustomersAsync,
-                    visibleCustomers: visibleCustomers,
+                    visibleCustomers: filteredCustomers,
                   ),
           ),
         ],
@@ -81,8 +84,7 @@ class CustomerListPage extends ConsumerWidget {
                 GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700),
           ),
           Consumer(builder: (ctx, ref, _) {
-            final count =
-                ref.watch(visibleCustomersProvider).length;
+            final count = ref.watch(filteredCustomersByPromiseProvider).length;
             return Text(
               '$count ${count == 1 ? 'party' : 'parties'}',
               style: GoogleFonts.poppins(
@@ -101,8 +103,7 @@ class CustomerListPage extends ConsumerWidget {
 
   Widget _buildCustomerList(
     BuildContext context,
-    WidgetRef ref,
-    {
+    WidgetRef ref, {
     required AsyncValue<List<CustomerEntity>> customersAsync,
     required AsyncValue<List<CustomerEntity>> sharedCustomersAsync,
     required List<CustomerEntity> visibleCustomers,
@@ -115,7 +116,8 @@ class CustomerListPage extends ConsumerWidget {
       return _buildShimmerList();
     }
 
-    final error = customersAsync.asError?.error ?? sharedCustomersAsync.asError?.error;
+    final error =
+        customersAsync.asError?.error ?? sharedCustomersAsync.asError?.error;
     if (error != null) {
       return _buildErrorState(context, error.toString());
     }
@@ -151,6 +153,7 @@ class CustomerListPage extends ConsumerWidget {
     List<CustomerEntity> customers,
   ) {
     final listState = ref.watch(customerListProvider);
+    final promisesByCustomer = ref.watch(nextOpenPromiseByCustomerProvider);
 
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 100),
@@ -168,6 +171,7 @@ class CustomerListPage extends ConsumerWidget {
           isDeleting: isDeleting,
           invertPerspective: isSharedLedger,
           showSharedBadge: isSharedLedger,
+          nextPromise: isSharedLedger ? null : promisesByCustomer[customer.id],
           onTap: () => context.push(
             AppRoutes.customerDetail(customer.id),
             extra: customer,
@@ -329,6 +333,42 @@ class CustomerListPage extends ConsumerWidget {
       padding: const EdgeInsets.only(top: 8),
       itemCount: 6,
       itemBuilder: (_, index) => const _ShimmerTile(),
+    );
+  }
+}
+
+class _PromiseFilterBar extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(paymentPromiseFilterProvider);
+    const filters = [
+      PaymentPromiseFilter.all,
+      PaymentPromiseFilter.dueToday,
+      PaymentPromiseFilter.dueTomorrow,
+      PaymentPromiseFilter.dueThisWeek,
+      PaymentPromiseFilter.overdue,
+      PaymentPromiseFilter.noPromiseDate,
+      PaymentPromiseFilter.partialPaid,
+      PaymentPromiseFilter.paid,
+    ];
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        scrollDirection: Axis.horizontal,
+        itemCount: filters.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, index) {
+          final filter = filters[index];
+          return ChoiceChip(
+            label: Text(filter.label),
+            selected: filter == selected,
+            onSelected: (_) =>
+                ref.read(paymentPromiseFilterProvider.notifier).state = filter,
+            visualDensity: VisualDensity.compact,
+          );
+        },
+      ),
     );
   }
 }

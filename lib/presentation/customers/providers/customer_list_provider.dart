@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/providers/customer_providers.dart';
+import '../../../core/providers/payment_promise_providers.dart';
 import '../../../domain/entities/customer_entity.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ class CustomerListNotifier extends StateNotifier<CustomerListState> {
   }
 
   void _performSearch(String query) {
-    final visibleCustomers = _ref.read(visibleCustomersProvider);
+    final visibleCustomers = _ref.read(filteredCustomersByPromiseProvider);
     final lowerQuery = query.toLowerCase();
     final list = visibleCustomers.where((customer) {
       final secondaryPhone = customer.secondaryPhone ?? '';

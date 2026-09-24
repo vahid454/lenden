@@ -7,9 +7,13 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/providers/auth_providers.dart';
 import '../../../core/providers/customer_providers.dart';
+import '../../../core/providers/payment_promise_providers.dart';
+import '../../../core/providers/transaction_providers.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/connectivity_service.dart';
 import '../../../core/utils/app_formatters.dart';
+import '../../../domain/entities/customer_entity.dart';
+import '../../../domain/entities/payment_promise_entity.dart';
 import '../../common/widgets/common_widgets.dart';
 import '../../customers/widgets/customer_card.dart';
 import '../../cashbook/pages/cashbook_page.dart';
@@ -67,7 +71,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               children: [
                 Text('Hello, ${name.split(' ').first}',
                     style: GoogleFonts.poppins(
-                        fontSize: 24, 
+                        fontSize: 24,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.5)),
                 Text('Track your accounts with confidence',
@@ -82,7 +86,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             )
           : Text(titles[_navIndex],
               style: GoogleFonts.poppins(
-                  fontSize: 22, 
+                  fontSize: 22,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -0.5)),
       actions: [
@@ -196,12 +200,16 @@ class _HomeTab extends ConsumerWidget {
     final toReceive = ref.watch(totalToReceiveProvider);
     final toPay = ref.watch(totalToPayProvider);
     final net = ref.watch(netBalanceProvider);
+    final promises =
+        ref.watch(paymentPromisesStreamProvider).valueOrNull ?? const [];
+    final todayCollection = ref.watch(todayCollectionProvider).valueOrNull ?? 0;
     final customerCount = visibleCustomers.length;
 
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(customersStreamProvider);
         ref.invalidate(sharedCustomersStreamProvider);
+        ref.invalidate(paymentPromisesStreamProvider);
         await Future.delayed(const Duration(milliseconds: 600));
       },
       child: CustomScrollView(
@@ -245,11 +253,15 @@ class _HomeTab extends ConsumerWidget {
                   _QuickInsightStrip(
                     customerCount: customerCount,
                     customerWithDuesCount:
-                        visibleCustomers
-                            .where((c) => !c.isSettled)
-                            .length,
+                        visibleCustomers.where((c) => !c.isSettled).length,
                     isNetPositive: net >= 0,
                   ).animate().fadeIn(delay: 180.ms),
+                  const SizedBox(height: 12),
+                  _FollowUpsHomePanel(
+                    promises: promises,
+                    customers: visibleCustomers,
+                    todayCollection: todayCollection,
+                  ).animate().fadeIn(delay: 210.ms),
                 ],
               ),
             ),
@@ -271,8 +283,7 @@ class _HomeTab extends ConsumerWidget {
                     onPressed: () => context.push(AppRoutes.customers),
                     child: Text('See All',
                         style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600, 
-                            fontSize: 13)),
+                            fontWeight: FontWeight.w600, fontSize: 13)),
                   ),
                 ],
               ).animate().fadeIn(delay: 200.ms),
@@ -312,10 +323,10 @@ class _HomeTab extends ConsumerWidget {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             )),
-                        child: Text('View all ${visibleCustomers.length} customers',
+                        child: Text(
+                            'View all ${visibleCustomers.length} customers',
                             style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14)),
+                                fontWeight: FontWeight.w700, fontSize: 14)),
                       ),
                     );
                   }
@@ -330,7 +341,9 @@ class _HomeTab extends ConsumerWidget {
                     onTap: () =>
                         context.push(AppRoutes.customerDetail(c.id), extra: c),
                   );
-                }, childCount: preview.length + (visibleCustomers.length > 6 ? 1 : 0)),
+                },
+                    childCount:
+                        preview.length + (visibleCustomers.length > 6 ? 1 : 0)),
               );
             },
           ),
@@ -515,9 +528,165 @@ class _SummaryChip extends StatelessWidget {
         Text(label,
             style: GoogleFonts.poppins(
                 fontSize: 11,
-                color:
-                    Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.5))),
       ]),
+    );
+  }
+}
+
+class _FollowUpsHomePanel extends StatelessWidget {
+  final List<PaymentPromiseEntity> promises;
+  final List<CustomerEntity> customers;
+  final double todayCollection;
+
+  const _FollowUpsHomePanel({
+    required this.promises,
+    required this.customers,
+    required this.todayCollection,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final open = promises.where((promise) => promise.isOpen).toList();
+    final overdue = open.where((promise) => promise.isOverdue(now)).toList();
+    final today = open.where((promise) => promise.isDueOn(now)).toList();
+    final week = open
+        .where((promise) => promise.isDueThisWeek(now) && !promise.isDueOn(now))
+        .toList();
+    final customerById = {
+      for (final customer in customers) customer.id: customer
+    };
+    final preview = [...overdue, ...today, ...week].take(3).toList();
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.phone_in_talk_outlined,
+                  size: 18, color: AppColors.warning),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Today\'s follow-ups',
+                        style: GoogleFonts.poppins(
+                            fontSize: 14, fontWeight: FontWeight.w700)),
+                    Text(
+                      'Collected today ${AppFormatters.rupee(todayCollection)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        color: cs.onSurface.withValues(alpha: 0.54),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Open follow-ups',
+                onPressed: () => context.push(AppRoutes.followUps),
+                icon: const Icon(Icons.arrow_forward_rounded, size: 19),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          Row(children: [
+            _FollowUpCount('Overdue', overdue, AppColors.danger),
+            _FollowUpCount('Today', today, AppColors.warning),
+            _FollowUpCount('This week', week, cs.primary),
+          ]),
+          if (preview.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            ...preview.map((promise) {
+              final customer = customerById[promise.customerId];
+              if (customer == null) return const SizedBox.shrink();
+              final color = promise.isOverdue(now)
+                  ? AppColors.danger
+                  : promise.isDueOn(now)
+                      ? AppColors.warning
+                      : cs.primary;
+              return InkWell(
+                onTap: () => context.push(AppRoutes.customerDetail(customer.id),
+                    extra: customer),
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 7),
+                  child: Row(children: [
+                    Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                            color: color, shape: BoxShape.circle)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(customer.name,
+                          style: GoogleFonts.poppins(
+                              fontSize: 12, fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    Text(AppFormatters.rupee(promise.remainingAmount),
+                        style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: color)),
+                  ]),
+                ),
+              );
+            }),
+          ] else
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text('No payment promises need a call right now.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: cs.onSurface.withValues(alpha: 0.54),
+                  )),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FollowUpCount extends StatelessWidget {
+  final String label;
+  final List<PaymentPromiseEntity> promises;
+  final Color color;
+  const _FollowUpCount(this.label, this.promises, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = promises.fold<double>(
+        0, (sum, promise) => sum + promise.remainingAmount);
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${promises.length}',
+              style: GoogleFonts.poppins(
+                  fontSize: 17, fontWeight: FontWeight.w700, color: color)),
+          Text(label,
+              style: GoogleFonts.poppins(
+                  fontSize: 10, color: color, fontWeight: FontWeight.w600)),
+          Text(AppFormatters.rupee(amount, compact: true),
+              style: GoogleFonts.poppins(
+                  fontSize: 10, color: color.withValues(alpha: 0.78))),
+        ]),
+      ),
     );
   }
 }
@@ -611,7 +780,10 @@ class _InsightPill extends StatelessWidget {
             style: GoogleFonts.poppins(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.72),
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.72),
               height: 1.35,
             ),
           ),
@@ -643,7 +815,8 @@ class _EmptyHomeState extends StatelessWidget {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-                color: cs.primary.withValues(alpha: 0.08), shape: BoxShape.circle),
+                color: cs.primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle),
             child: Icon(Icons.group_outlined,
                 size: 36, color: cs.primary.withValues(alpha: 0.5)),
           ).animate().scale(curve: Curves.elasticOut),

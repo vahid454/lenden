@@ -16,6 +16,8 @@ class AddEditTransactionPage extends ConsumerStatefulWidget {
   final String customerName;
   final double currentBalance;
   final TransactionType? initialType;
+  final double? initialAmount;
+  final String? initialNote;
   final TransactionEntity? existingTransaction;
 
   const AddEditTransactionPage({
@@ -24,6 +26,8 @@ class AddEditTransactionPage extends ConsumerStatefulWidget {
     required this.customerName,
     this.currentBalance = 0,
     this.initialType,
+    this.initialAmount,
+    this.initialNote,
     this.existingTransaction,
   });
 
@@ -54,6 +58,14 @@ class _AddEditTransactionPageState
           ? e.amount.toInt().toString()
           : e.amount.toStringAsFixed(2);
       _noteCtrl.text = e.note ?? '';
+    } else {
+      if (widget.initialAmount != null && widget.initialAmount! > 0) {
+        final amount = widget.initialAmount!;
+        _amountCtrl.text = amount % 1 == 0
+            ? amount.toInt().toString()
+            : amount.toStringAsFixed(2);
+      }
+      _noteCtrl.text = widget.initialNote ?? '';
     }
     _amountCtrl.addListener(() {
       if (mounted) setState(() {});

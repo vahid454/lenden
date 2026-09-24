@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../domain/entities/customer_entity.dart';
+import '../../../domain/entities/payment_promise_entity.dart';
 
 /// Customer list tile for quick ledger access.
 class CustomerCard extends StatelessWidget {
@@ -17,6 +18,7 @@ class CustomerCard extends StatelessWidget {
   final int animationIndex;
   final bool invertPerspective;
   final bool showSharedBadge;
+  final PaymentPromiseEntity? nextPromise;
 
   const CustomerCard({
     super.key,
@@ -28,6 +30,7 @@ class CustomerCard extends StatelessWidget {
     this.animationIndex = 0,
     this.invertPerspective = false,
     this.showSharedBadge = false,
+    this.nextPromise,
   });
 
   @override
@@ -150,6 +153,10 @@ class CustomerCard extends StatelessWidget {
                           ),
                         ),
                       ],
+                      if (nextPromise != null && !showSharedBadge) ...[
+                        const SizedBox(height: 5),
+                        _PromiseBadge(promise: nextPromise!),
+                      ],
                     ],
                   )),
 
@@ -206,6 +213,47 @@ class CustomerCard extends StatelessWidget {
 
   String _formatAmount(double amount) {
     return AppFormatters.currency(amount);
+  }
+}
+
+class _PromiseBadge extends StatelessWidget {
+  final PaymentPromiseEntity promise;
+  const _PromiseBadge({required this.promise});
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final overdue = promise.isOverdue(now);
+    final dueToday = promise.isDueOn(now);
+    final color = overdue
+        ? AppColors.danger
+        : dueToday
+            ? AppColors.warning
+            : Theme.of(context).colorScheme.primary;
+    final label = overdue
+        ? 'Overdue'
+        : dueToday
+            ? 'Due today'
+            : 'Due ${AppFormatters.shortDate(promise.promisedDate)}';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.event_outlined, size: 12, color: color),
+        const SizedBox(width: 3),
+        Flexible(
+          child: Text(
+            '${AppFormatters.rupee(promise.remainingAmount)} $label',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.poppins(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

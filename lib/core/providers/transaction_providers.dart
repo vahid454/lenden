@@ -66,3 +66,25 @@ final transactionsStreamProvider =
     yield either.fold((_) => <TransactionEntity>[], (list) => list);
   }
 });
+
+/// Sum of actual payments received today. Promises never affect this number.
+final todayCollectionProvider = FutureProvider<double>((ref) async {
+  final userId = ref.watch(currentUserProvider)?.id;
+  if (userId == null || userId.isEmpty) return 0;
+  final now = DateTime.now();
+  final start = DateTime(now.year, now.month, now.day);
+  final end = start
+      .add(const Duration(days: 1))
+      .subtract(const Duration(milliseconds: 1));
+  final result = await ref.watch(getTransactionsByDateRangeUseCaseProvider)(
+    userId: userId,
+    from: start,
+    to: end,
+  );
+  return result.fold(
+    (_) => 0,
+    (transactions) => transactions
+        .where((transaction) => transaction.isGot)
+        .fold<double>(0, (sum, transaction) => sum + transaction.amount),
+  );
+});

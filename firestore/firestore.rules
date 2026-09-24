@@ -11,6 +11,9 @@ service cloud.firestore {
     function isOptionalString(field) {
       return !(field in request.resource.data) || request.resource.data[field] is string;
     }
+    function isOptionalTimestamp(field) {
+      return !(field in request.resource.data) || request.resource.data[field] is timestamp;
+    }
     function hasValidCustomerFields() {
       return request.resource.data.keys().hasOnly([
           'userId',
@@ -84,6 +87,46 @@ service cloud.firestore {
         && request.resource.data.createdAt is timestamp
         && request.resource.data.yearMonthDay is string;
     }
+    function hasValidPaymentPromiseFields() {
+      return request.resource.data.keys().hasOnly([
+          'userId',
+          'customerId',
+          'amount',
+          'fulfilledAmount',
+          'promisedDate',
+          'status',
+          'note',
+          'lastContactedAt',
+          'followUpNote',
+          'createdAt',
+          'updatedAt',
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.customerId is string
+        && request.resource.data.customerId.size() > 0
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.amount <= 10000000
+        && request.resource.data.fulfilledAmount is number
+        && request.resource.data.fulfilledAmount >= 0
+        && request.resource.data.fulfilledAmount <= request.resource.data.amount
+        && request.resource.data.promisedDate is timestamp
+        && request.resource.data.status in ['pending', 'partialPaid', 'paid', 'missed', 'rescheduled']
+        && isOptionalString('note')
+        && isOptionalString('followUpNote')
+        && isOptionalTimestamp('lastContactedAt')
+        && request.resource.data.createdAt is timestamp;
+    }
+    function hasConsistentPaymentPromiseStatus() {
+      return (request.resource.data.status == 'pending'
+              && request.resource.data.fulfilledAmount == 0)
+          || (request.resource.data.status == 'partialPaid'
+              && request.resource.data.fulfilledAmount > 0
+              && request.resource.data.fulfilledAmount < request.resource.data.amount)
+          || (request.resource.data.status == 'paid'
+              && request.resource.data.fulfilledAmount == request.resource.data.amount)
+          || request.resource.data.status in ['missed', 'rescheduled'];
+    }
 
     // ── Users ─────────────────────────────────────────────────────────────
     match /users/{userId} {
@@ -125,6 +168,30 @@ service cloud.firestore {
       allow read:   if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSignedIn() && hasValidCashbookFields();
       allow update: if false;
+      allow delete: if false;
+    }
+
+    // ── Payment Promises ──────────────────────────────────────────────────
+    // Promise documents are history. Rescheduling creates a fresh document;
+    // the original is retained with a terminal status.
+    match /paymentPromises/{promiseId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+                    && hasValidPaymentPromiseFields()
+                    && hasConsistentPaymentPromiseStatus()
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.fulfilledAmount == 0
+                    && exists(/databases/$(database)/documents/customers/$(request.resource.data.customerId))
+                    && get(/databases/$(database)/documents/customers/$(request.resource.data.customerId)).data.userId == request.auth.uid;
+      allow update: if isSignedIn()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == resource.data.userId
+                    && request.resource.data.customerId == resource.data.customerId
+                    && request.resource.data.amount == resource.data.amount
+                    && request.resource.data.promisedDate == resource.data.promisedDate
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && hasValidPaymentPromiseFields()
+                    && hasConsistentPaymentPromiseStatus();
       allow delete: if false;
     }
   }

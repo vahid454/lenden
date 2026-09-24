@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/providers/auth_providers.dart';
 import '../../../core/providers/customer_providers.dart';
+import '../../../core/providers/payment_promise_providers.dart';
 import '../../../core/providers/transaction_providers.dart'
     show transactionsStreamProvider;
 import '../../../core/router/app_router.dart';
@@ -17,9 +18,11 @@ import '../../../core/services/pdf_export_service.dart';
 import '../../../core/services/share_service.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../domain/entities/customer_entity.dart';
+import '../../../domain/entities/payment_promise_entity.dart';
 import '../../../domain/entities/transaction_entity.dart';
 import '../../transactions/pages/add_edit_transaction_page.dart';
 import '../../transactions/widgets/transaction_tile.dart';
+import '../widgets/payment_promise_sheet.dart';
 
 class CustomerDetailPage extends ConsumerStatefulWidget {
   final String customerId;
@@ -46,6 +49,7 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
     final visibleCustomers = ref.watch(visibleCustomersProvider);
     final transactionsAsync =
         ref.watch(transactionsStreamProvider(widget.customerId));
+    final promises = ref.watch(promisesForCustomerProvider(widget.customerId));
     final matchedCustomers =
         visibleCustomers.where((c) => c.id == widget.customerId).toList();
     final customer =
@@ -96,6 +100,27 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
           isSharedLedger: isSharedLedger,
           transactionsAsync: transactionsAsync,
           transactions: displayTransactions,
+          promises: promises,
+          onSetPromise: isSharedLedger
+              ? null
+              : () => _setPromise(context, ledgerCustomer),
+          onAddPayment: isSharedLedger
+              ? null
+              : (promise) => _recordPromisePayment(
+                    context,
+                    ledgerCustomer,
+                    promise,
+                  ),
+          onReschedule: isSharedLedger
+              ? null
+              : (promise) => showPaymentPromiseSheet(
+                    context,
+                    customer: ledgerCustomer,
+                    replacing: promise,
+                  ),
+          onContact: isSharedLedger
+              ? null
+              : (promise) => _recordContact(context, promise),
           onRetry: () =>
               ref.invalidate(transactionsStreamProvider(ledgerCustomer.id)),
         ),
@@ -206,6 +231,9 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
         background: _HeaderContent(
           customer: customer,
           isSharedLedger: isSharedLedger,
+          nextPromise: ref.read(nextOpenPromiseByCustomerProvider)[customer.id],
+          onSetPromise:
+              isSharedLedger ? null : () => _setPromise(context, customer),
           onSharePdf:
               isSharedLedger ? null : () => _exportPdf(context, customer),
         ),
@@ -228,10 +256,12 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
     );
   }
 
-  Future<void> _openAddTransaction(
+  Future<TransactionEntity?> _openAddTransaction(
     BuildContext context,
     CustomerEntity customer, {
     TransactionType? initialType,
+    double? initialAmount,
+    String? initialNote,
   }) async {
     final savedTransaction =
         await Navigator.of(context).push<TransactionEntity>(
@@ -241,6 +271,8 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
           customerName: customer.name,
           currentBalance: customer.balance,
           initialType: initialType,
+          initialAmount: initialAmount,
+          initialNote: initialNote,
         ),
         transitionsBuilder: (_, anim, __, child) => SlideTransition(
           position: Tween(begin: const Offset(0, 1), end: Offset.zero)
@@ -267,6 +299,67 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
         }
       });
     }
+    return savedTransaction;
+  }
+
+  Future<void> _setPromise(
+    BuildContext context,
+    CustomerEntity customer,
+  ) async {
+    if (customer.balance <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('A payment promise can only be set when money is due.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+    await showPaymentPromiseSheet(context, customer: customer);
+  }
+
+  Future<void> _recordContact(
+    BuildContext context,
+    PaymentPromiseEntity promise,
+  ) async {
+    final note = await showFollowUpContactDialog(
+      context,
+      initialNote: promise.followUpNote,
+    );
+    if (note == null || !context.mounted) return;
+    final error = await ref
+        .read(paymentPromiseActionsProvider)
+        .contact(promise, note: note);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(error ?? 'Marked as contacted today.'),
+      backgroundColor: error == null ? null : AppColors.danger,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  Future<void> _recordPromisePayment(
+    BuildContext context,
+    CustomerEntity customer,
+    PaymentPromiseEntity promise,
+  ) async {
+    final saved = await _openAddTransaction(
+      context,
+      customer,
+      initialType: TransactionType.got,
+      initialAmount: promise.remainingAmount,
+      initialNote:
+          'Payment against promise for ${DateFormat('d MMM').format(promise.promisedDate)}',
+    );
+    if (saved == null || saved.type != TransactionType.got) return;
+    final error = await ref.read(paymentPromiseActionsProvider).payment(
+          promise,
+          saved.amount,
+        );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(error ?? 'Payment promise updated.'),
+      backgroundColor: error == null ? null : AppColors.danger,
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 }
 
@@ -274,11 +367,15 @@ class _HeaderContent extends StatelessWidget {
   final CustomerEntity customer;
   final bool isSharedLedger;
   final Future<void> Function()? onSharePdf;
+  final PaymentPromiseEntity? nextPromise;
+  final VoidCallback? onSetPromise;
 
   const _HeaderContent({
     required this.customer,
     required this.isSharedLedger,
     required this.onSharePdf,
+    required this.nextPromise,
+    required this.onSetPromise,
   });
 
   @override
@@ -386,6 +483,8 @@ class _HeaderContent extends StatelessWidget {
               customer: customer,
               isSharedLedger: isSharedLedger,
               onSharePdf: onSharePdf,
+              nextPromise: nextPromise,
+              onSetPromise: onSetPromise,
             ),
             const SizedBox(height: 10),
           ],
@@ -459,73 +558,97 @@ class _QuickActions extends StatelessWidget {
   final CustomerEntity customer;
   final bool isSharedLedger;
   final Future<void> Function()? onSharePdf;
+  final PaymentPromiseEntity? nextPromise;
+  final VoidCallback? onSetPromise;
 
   const _QuickActions({
     required this.customer,
     required this.isSharedLedger,
     required this.onSharePdf,
+    required this.nextPromise,
+    required this.onSetPromise,
   });
 
   @override
   Widget build(BuildContext context) {
     final secondaryPhone = customer.secondaryPhone;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _Btn(Icons.call_outlined, 'Call', AppColors.primary, () async {
-          final uri = Uri.parse('tel:${customer.phone}');
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri);
-          }
-        }),
-        const SizedBox(width: 8),
-        _Btn(Icons.sms_outlined, 'SMS', const Color(0xFF0097A7), () async {
-          final uri = Uri.parse('sms:${customer.phone}');
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri);
-          }
-        }),
-        const SizedBox(width: 8),
-        _Btn(Icons.notifications_outlined, 'Remind', const Color(0xFFD97706),
-            () async {
-          final bal = customer.balance;
-          final amt = bal.abs().toStringAsFixed(0);
-          final msg = bal > 0
-              ? 'Hi ${customer.name}, friendly reminder: you owe me ₹$amt. Please clear when convenient. - Sent via LenDen'
-              : 'Hi ${customer.name}, reminder: I owe you ₹$amt. Will settle soon. - Sent via LenDen';
-          final encoded = Uri.encodeComponent(msg);
-          final waUri = Uri.parse(
-              'whatsapp://send?phone=91${customer.phone}&text=$encoded');
-          final smsUri = Uri.parse('sms:${customer.phone}?body=$encoded');
-          if (await canLaunchUrl(waUri)) {
-            await launchUrl(waUri, mode: LaunchMode.externalApplication);
-          } else if (await canLaunchUrl(smsUri)) {
-            await launchUrl(smsUri);
-          }
-        }),
-        const SizedBox(width: 8),
-        _Btn(Icons.copy_outlined, 'Copy', Colors.grey.shade600, () {
-          final copied = secondaryPhone != null && secondaryPhone.isNotEmpty
-              ? '${customer.phone}, $secondaryPhone'
-              : customer.phone;
-          Clipboard.setData(ClipboardData(text: copied));
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Number copied'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }),
-        if (!isSharedLedger && onSharePdf != null) ...[
-          const SizedBox(width: 8),
-          _Btn(
-            Icons.picture_as_pdf_outlined,
-            'PDF',
-            const Color(0xFFE11D48),
-            () => onSharePdf!.call(),
-          ),
-        ],
-      ],
+    return SizedBox(
+      height: 58,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _Btn(Icons.call_outlined, 'Call', AppColors.primary, () async {
+              final uri = Uri.parse('tel:${customer.phone}');
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri);
+              }
+            }),
+            const SizedBox(width: 8),
+            _Btn(Icons.sms_outlined, 'SMS', const Color(0xFF0097A7), () async {
+              final uri = Uri.parse('sms:${customer.phone}');
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri);
+              }
+            }),
+            const SizedBox(width: 8),
+            _Btn(
+                Icons.notifications_outlined, 'Remind', const Color(0xFFD97706),
+                () async {
+              final bal = customer.balance;
+              final promise = nextPromise;
+              final amt =
+                  (promise?.remainingAmount ?? bal.abs()).toStringAsFixed(0);
+              final dueText = promise == null
+                  ? ''
+                  : ' As discussed, you promised this on ${DateFormat('d MMM').format(promise.promisedDate)}.';
+              final msg = bal > 0
+                  ? 'Hi ${customer.name}, friendly reminder regarding your pending ₹$amt payment.$dueText Please send it when convenient. - LenDen'
+                  : 'Hi ${customer.name}, reminder: I owe you ₹$amt. Will settle soon. - Sent via LenDen';
+              final encoded = Uri.encodeComponent(msg);
+              final waUri = Uri.parse(
+                  'whatsapp://send?phone=91${customer.phone}&text=$encoded');
+              final smsUri = Uri.parse('sms:${customer.phone}?body=$encoded');
+              if (await canLaunchUrl(waUri)) {
+                await launchUrl(waUri, mode: LaunchMode.externalApplication);
+              } else if (await canLaunchUrl(smsUri)) {
+                await launchUrl(smsUri);
+              }
+            }),
+            const SizedBox(width: 8),
+            if (!isSharedLedger && onSetPromise != null) ...[
+              _Btn(
+                Icons.event_available_outlined,
+                'Promise',
+                const Color(0xFF7C3AED),
+                onSetPromise!,
+              ),
+              const SizedBox(width: 8),
+            ],
+            _Btn(Icons.copy_outlined, 'Copy', Colors.grey.shade600, () {
+              final copied = secondaryPhone != null && secondaryPhone.isNotEmpty
+                  ? '${customer.phone}, $secondaryPhone'
+                  : customer.phone;
+              Clipboard.setData(ClipboardData(text: copied));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Number copied'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }),
+            if (!isSharedLedger && onSharePdf != null) ...[
+              const SizedBox(width: 8),
+              _Btn(
+                Icons.picture_as_pdf_outlined,
+                'PDF',
+                const Color(0xFFE11D48),
+                () => onSharePdf!.call(),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -568,11 +691,224 @@ class _Btn extends StatelessWidget {
   }
 }
 
+class _PromisePanel extends StatelessWidget {
+  final List<PaymentPromiseEntity> promises;
+  final VoidCallback? onSetPromise;
+  final ValueChanged<PaymentPromiseEntity>? onAddPayment;
+  final ValueChanged<PaymentPromiseEntity>? onReschedule;
+  final ValueChanged<PaymentPromiseEntity>? onContact;
+
+  const _PromisePanel({
+    required this.promises,
+    required this.onSetPromise,
+    required this.onAddPayment,
+    required this.onReschedule,
+    required this.onContact,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final open = promises.where((promise) => promise.isOpen).toList()
+      ..sort((a, b) => a.promisedDate.compareTo(b.promisedDate));
+    final featured = open.isNotEmpty ? open.first : null;
+    final cs = Theme.of(context).colorScheme;
+    final urgency = featured?.isOverdue(now) == true
+        ? AppColors.danger
+        : featured?.isDueOn(now) == true
+            ? AppColors.warning
+            : cs.primary;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: urgency.withValues(alpha: featured == null ? 0.18 : 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.event_note_outlined, size: 18, color: urgency),
+              const SizedBox(width: 8),
+              Text('Payment promises',
+                  style: GoogleFonts.poppins(
+                      fontSize: 14, fontWeight: FontWeight.w700)),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Set payment promise',
+                onPressed: onSetPromise,
+                icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          if (featured == null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 2),
+              child: Text(
+                promises.isEmpty
+                    ? 'No payment date promised yet.'
+                    : 'No open promise. ${promises.length} commitment${promises.length == 1 ? '' : 's'} kept in history.',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: cs.onSurface.withValues(alpha: 0.56),
+                ),
+              ),
+            )
+          else ...[
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${AppFormatters.rupee(featured.remainingAmount)} due ${_dueLabel(featured, now)}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: urgency,
+                        ),
+                      ),
+                      if (featured.note != null && featured.note!.isNotEmpty)
+                        Text(featured.note!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: cs.onSurface.withValues(alpha: 0.54),
+                            )),
+                      if (featured.lastContactedAt != null)
+                        Text(
+                          'Last contacted ${AppFormatters.relativeDate(featured.lastContactedAt!)}${featured.followUpNote == null || featured.followUpNote!.isEmpty ? '' : ' - ${featured.followUpNote}'}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            color: cs.onSurface.withValues(alpha: 0.48),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Mark contacted today',
+                  onPressed: () => onContact?.call(featured),
+                  icon: const Icon(Icons.phone_in_talk_outlined, size: 19),
+                  visualDensity: VisualDensity.compact,
+                ),
+                IconButton(
+                  tooltip: 'Add payment',
+                  onPressed: () => onAddPayment?.call(featured),
+                  icon: const Icon(Icons.payments_outlined, size: 20),
+                  visualDensity: VisualDensity.compact,
+                ),
+                IconButton(
+                  tooltip: 'Reschedule promise',
+                  onPressed: () => onReschedule?.call(featured),
+                  icon: const Icon(Icons.event_repeat_outlined, size: 20),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+          ],
+          if (promises.isNotEmpty)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => _showHistory(context, promises, now),
+                child: Text('${promises.length} in history'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _dueLabel(PaymentPromiseEntity promise, DateTime now) {
+    if (promise.isOverdue(now)) return 'overdue';
+    if (promise.isDueOn(now)) return 'today';
+    if (promise.isDueOn(now.add(const Duration(days: 1)))) return 'tomorrow';
+    return DateFormat('d MMM').format(promise.promisedDate);
+  }
+
+  static Future<void> _showHistory(
+    BuildContext context,
+    List<PaymentPromiseEntity> promises,
+    DateTime now,
+  ) =>
+      showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Promise history',
+                    style: GoogleFonts.poppins(
+                        fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 360),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: promises.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, index) {
+                      final promise = promises[index];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          promise.isPaid
+                              ? Icons.check_circle_outline_rounded
+                              : promise.isOverdue(now)
+                                  ? Icons.error_outline_rounded
+                                  : Icons.event_outlined,
+                          color: promise.isPaid
+                              ? AppColors.success
+                              : promise.isOverdue(now)
+                                  ? AppColors.danger
+                                  : Theme.of(context).colorScheme.primary,
+                        ),
+                        title: Text(
+                          '${AppFormatters.rupee(promise.amount)} - ${DateFormat('d MMM yyyy').format(promise.promisedDate)}',
+                          style: GoogleFonts.poppins(
+                              fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          '${promise.status.label}${promise.fulfilledAmount > 0 ? ' | received ${AppFormatters.rupee(promise.fulfilledAmount)}' : ''}',
+                          style: GoogleFonts.poppins(fontSize: 11),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
 class _TransactionListBody extends StatelessWidget {
   final CustomerEntity customer;
   final bool isSharedLedger;
   final AsyncValue<List<TransactionEntity>> transactionsAsync;
   final List<TransactionEntity> transactions;
+  final List<PaymentPromiseEntity> promises;
+  final VoidCallback? onSetPromise;
+  final ValueChanged<PaymentPromiseEntity>? onAddPayment;
+  final ValueChanged<PaymentPromiseEntity>? onReschedule;
+  final ValueChanged<PaymentPromiseEntity>? onContact;
   final VoidCallback onRetry;
 
   const _TransactionListBody({
@@ -580,6 +916,11 @@ class _TransactionListBody extends StatelessWidget {
     required this.isSharedLedger,
     required this.transactionsAsync,
     required this.transactions,
+    required this.promises,
+    required this.onSetPromise,
+    required this.onAddPayment,
+    required this.onReschedule,
+    required this.onContact,
     required this.onRetry,
   });
 
@@ -588,6 +929,14 @@ class _TransactionListBody extends StatelessWidget {
     return Column(
       children: [
         const SizedBox(height: 8),
+        if (!isSharedLedger)
+          _PromisePanel(
+            promises: promises,
+            onSetPromise: onSetPromise,
+            onAddPayment: onAddPayment,
+            onReschedule: onReschedule,
+            onContact: onContact,
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
           child: Row(
