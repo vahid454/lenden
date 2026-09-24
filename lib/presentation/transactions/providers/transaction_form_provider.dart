@@ -128,22 +128,13 @@ class TransactionFormNotifier extends StateNotifier<TransactionFormState> {
 
   // ── Delete ───────────────────────────────────────────────────────────────
 
-  Future<bool> deleteTransaction(TransactionEntity tx) async {
-    state = state.copyWith(isLoading: true, clearError: true);
-
-    final useCase = _ref.read(deleteTransactionUseCaseProvider);
-    final result = await useCase(tx);
-
-    return result.fold(
-      (f) {
-        state = state.copyWith(isLoading: false, errorMessage: f.message);
-        return false;
-      },
-      (_) {
-        state = state.copyWith(isLoading: false);
-        return true;
-      },
+  Future<bool> deleteTransaction(TransactionEntity _) async {
+    state = state.copyWith(
+      isLoading: false,
+      errorMessage:
+          'Entry deletion is disabled to protect your ledger history.',
     );
+    return false;
   }
 }
 

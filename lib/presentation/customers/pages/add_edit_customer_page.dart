@@ -30,23 +30,26 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
   late final TextEditingController _phoneCtrl;
+  late final TextEditingController _secondaryPhoneCtrl;
   late final TextEditingController _addressCtrl;
   late final TextEditingController _notesCtrl;
 
-  final _nameFocus    = FocusNode();
-  final _phoneFocus   = FocusNode();
+  final _nameFocus = FocusNode();
+  final _phoneFocus = FocusNode();
+  final _secondaryPhoneFocus = FocusNode();
   final _addressFocus = FocusNode();
-  final _notesFocus   = FocusNode();
+  final _notesFocus = FocusNode();
 
   @override
   void initState() {
     super.initState();
     // Pre-fill for edit mode
     final c = widget.existingCustomer;
-    _nameCtrl    = TextEditingController(text: c?.name ?? '');
-    _phoneCtrl   = TextEditingController(text: c?.phone ?? '');
+    _nameCtrl = TextEditingController(text: c?.name ?? '');
+    _phoneCtrl = TextEditingController(text: c?.phone ?? '');
+    _secondaryPhoneCtrl = TextEditingController(text: c?.secondaryPhone ?? '');
     _addressCtrl = TextEditingController(text: c?.address ?? '');
-    _notesCtrl   = TextEditingController(text: c?.notes ?? '');
+    _notesCtrl = TextEditingController(text: c?.notes ?? '');
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _nameFocus.requestFocus();
@@ -57,10 +60,12 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
+    _secondaryPhoneCtrl.dispose();
     _addressCtrl.dispose();
     _notesCtrl.dispose();
     _nameFocus.dispose();
     _phoneFocus.dispose();
+    _secondaryPhoneFocus.dispose();
     _addressFocus.dispose();
     _notesFocus.dispose();
     super.dispose();
@@ -76,17 +81,19 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
     if (widget.isEditing) {
       success = await notifier.updateCustomer(
         existing: widget.existingCustomer!,
-        name:     _nameCtrl.text,
-        phone:    _phoneCtrl.text,
-        address:  _addressCtrl.text,
-        notes:    _notesCtrl.text,
+        name: _nameCtrl.text,
+        phone: _phoneCtrl.text,
+        secondaryPhone: _secondaryPhoneCtrl.text,
+        address: _addressCtrl.text,
+        notes: _notesCtrl.text,
       );
     } else {
       success = await notifier.addCustomer(
-        name:    _nameCtrl.text,
-        phone:   _phoneCtrl.text,
+        name: _nameCtrl.text,
+        phone: _phoneCtrl.text,
+        secondaryPhone: _secondaryPhoneCtrl.text,
         address: _addressCtrl.text,
-        notes:   _notesCtrl.text,
+        notes: _notesCtrl.text,
       );
     }
 
@@ -187,8 +194,21 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
                   _PhoneField(
                     controller: _phoneCtrl,
                     focusNode: _phoneFocus,
-                    onEditingComplete: () => _addressFocus.requestFocus(),
+                    label: 'Mobile Number *',
+                    validator: Validators.phone,
+                    onEditingComplete: () =>
+                        _secondaryPhoneFocus.requestFocus(),
                   ).animate().fadeIn(delay: 200.ms),
+
+                  const SizedBox(height: 14),
+
+                  _PhoneField(
+                    controller: _secondaryPhoneCtrl,
+                    focusNode: _secondaryPhoneFocus,
+                    label: 'Secondary Mobile Number',
+                    validator: Validators.optionalPhone,
+                    onEditingComplete: () => _addressFocus.requestFocus(),
+                  ).animate().fadeIn(delay: 225.ms),
 
                   const SizedBox(height: 24),
 
@@ -326,11 +346,15 @@ class _AvatarPreviewState extends State<_AvatarPreview> {
 class _PhoneField extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
+  final String label;
+  final FormFieldValidator<String> validator;
   final VoidCallback onEditingComplete;
 
   const _PhoneField({
     required this.controller,
     required this.focusNode,
+    required this.label,
+    required this.validator,
     required this.onEditingComplete,
   });
 
@@ -348,10 +372,10 @@ class _PhoneField extends StatelessWidget {
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(AppConstants.phoneLength),
       ],
-      validator: Validators.phone,
+      validator: validator,
       decoration: InputDecoration(
         counterText: '',
-        labelText: 'Mobile Number *',
+        labelText: label,
         hintText: '98765 43210',
         prefixIcon: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),

@@ -46,6 +46,7 @@ class CustomerFormNotifier extends StateNotifier<CustomerFormState> {
   Future<bool> addCustomer({
     required String name,
     required String phone,
+    String? secondaryPhone,
     String? address,
     String? notes,
   }) async {
@@ -66,11 +67,14 @@ class CustomerFormNotifier extends StateNotifier<CustomerFormState> {
       userId: userId,
       name: name.trim(),
       phone: phone.trim(),
+      secondaryPhone: secondaryPhone?.trim().isEmpty == true
+          ? null
+          : secondaryPhone?.trim(),
       address: address?.trim().isEmpty == true ? null : address?.trim(),
       notes: notes?.trim().isEmpty == true ? null : notes?.trim(),
       createdAt: DateTime.now(),
       // Store owner info so the other party sees who added them
-      ownerName:  currentUser?.name,
+      ownerName: currentUser?.name,
       ownerPhone: currentUser?.phone,
     );
 
@@ -97,6 +101,7 @@ class CustomerFormNotifier extends StateNotifier<CustomerFormState> {
     required CustomerEntity existing,
     required String name,
     required String phone,
+    String? secondaryPhone,
     String? address,
     String? notes,
   }) async {
@@ -105,8 +110,14 @@ class CustomerFormNotifier extends StateNotifier<CustomerFormState> {
     final updated = existing.copyWith(
       name: name.trim(),
       phone: phone.trim(),
+      secondaryPhone: secondaryPhone?.trim().isEmpty == true
+          ? null
+          : secondaryPhone?.trim(),
+      clearSecondaryPhone: secondaryPhone?.trim().isEmpty == true,
       address: address?.trim().isEmpty == true ? null : address?.trim(),
+      clearAddress: address?.trim().isEmpty == true,
       notes: notes?.trim().isEmpty == true ? null : notes?.trim(),
+      clearNotes: notes?.trim().isEmpty == true,
       updatedAt: DateTime.now(),
     );
 

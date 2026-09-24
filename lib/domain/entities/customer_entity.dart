@@ -5,6 +5,7 @@ class CustomerEntity extends Equatable {
   final String userId;
   final String name;
   final String phone;
+  final String? secondaryPhone;
   final String? address;
   final String? notes;
   final DateTime createdAt;
@@ -23,6 +24,7 @@ class CustomerEntity extends Equatable {
     required this.userId,
     required this.name,
     required this.phone,
+    this.secondaryPhone,
     this.address,
     this.notes,
     required this.createdAt,
@@ -33,8 +35,8 @@ class CustomerEntity extends Equatable {
   });
 
   bool get isCreditor => balance > 0;
-  bool get isDebtor   => balance < 0;
-  bool get isSettled  => balance == 0;
+  bool get isDebtor => balance < 0;
+  bool get isSettled => balance == 0;
   double get absBalance => balance.abs();
 
   String get initials {
@@ -46,24 +48,52 @@ class CustomerEntity extends Equatable {
   }
 
   CustomerEntity copyWith({
-    String? id, String? userId, String? name, String? phone,
-    String? address, String? notes, DateTime? createdAt, DateTime? updatedAt,
-    double? balance, String? ownerName, String? ownerPhone,
+    String? id,
+    String? userId,
+    String? name,
+    String? phone,
+    String? secondaryPhone,
+    String? address,
+    String? notes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    double? balance,
+    String? ownerName,
+    String? ownerPhone,
+    bool clearSecondaryPhone = false,
+    bool clearAddress = false,
+    bool clearNotes = false,
   }) {
     return CustomerEntity(
-      id: id ?? this.id, userId: userId ?? this.userId,
-      name: name ?? this.name, phone: phone ?? this.phone,
-      address: address ?? this.address, notes: notes ?? this.notes,
-      createdAt: createdAt ?? this.createdAt, updatedAt: updatedAt ?? this.updatedAt,
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      secondaryPhone:
+          clearSecondaryPhone ? null : secondaryPhone ?? this.secondaryPhone,
+      address: clearAddress ? null : address ?? this.address,
+      notes: clearNotes ? null : notes ?? this.notes,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       balance: balance ?? this.balance,
-      ownerName:  ownerName  ?? this.ownerName,
+      ownerName: ownerName ?? this.ownerName,
       ownerPhone: ownerPhone ?? this.ownerPhone,
     );
   }
 
   @override
   List<Object?> get props => [
-    id, userId, name, phone, address, notes, createdAt, updatedAt, balance,
-    ownerName, ownerPhone,
-  ];
+        id,
+        userId,
+        name,
+        phone,
+        secondaryPhone,
+        address,
+        notes,
+        createdAt,
+        updatedAt,
+        balance,
+        ownerName,
+        ownerPhone,
+      ];
 }

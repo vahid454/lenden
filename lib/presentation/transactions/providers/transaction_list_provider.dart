@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/providers/transaction_providers.dart';
 import '../../../domain/entities/transaction_entity.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -15,38 +14,26 @@ class TransactionListState {
     String? deletingId,
     String? errorMessage,
     bool clearDeleting = false,
-    bool clearError    = false,
+    bool clearError = false,
   }) =>
       TransactionListState(
-        deletingId:   clearDeleting ? null : deletingId   ?? this.deletingId,
-        errorMessage: clearError    ? null : errorMessage ?? this.errorMessage,
+        deletingId: clearDeleting ? null : deletingId ?? this.deletingId,
+        errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
       );
 }
 
 // ── Notifier ──────────────────────────────────────────────────────────────────
 
 class TransactionListNotifier extends StateNotifier<TransactionListState> {
-  final Ref _ref;
+  TransactionListNotifier() : super(const TransactionListState());
 
-  TransactionListNotifier(this._ref) : super(const TransactionListState());
-
-  Future<bool> deleteTransaction(TransactionEntity tx) async {
-    state = state.copyWith(deletingId: tx.id, clearError: true);
-
-    final useCase = _ref.read(deleteTransactionUseCaseProvider);
-    final result  = await useCase(tx);
-
-    return result.fold(
-      (f) {
-        state = state.copyWith(
-            clearDeleting: true, errorMessage: f.message);
-        return false;
-      },
-      (_) {
-        state = state.copyWith(clearDeleting: true);
-        return true;
-      },
+  Future<bool> deleteTransaction(TransactionEntity _) async {
+    state = state.copyWith(
+      clearDeleting: true,
+      errorMessage:
+          'Entry deletion is disabled to protect your ledger history.',
     );
+    return false;
   }
 
   void clearError() => state = state.copyWith(clearError: true);
@@ -56,5 +43,5 @@ class TransactionListNotifier extends StateNotifier<TransactionListState> {
 
 final transactionListProvider = StateNotifierProvider.autoDispose
     .family<TransactionListNotifier, TransactionListState, String>(
-  (ref, customerId) => TransactionListNotifier(ref),
+  (ref, customerId) => TransactionListNotifier(),
 );

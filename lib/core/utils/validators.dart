@@ -18,6 +18,12 @@ class Validators {
     return null;
   }
 
+  /// Optional Indian mobile number validation.
+  static String? optionalPhone(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    return phone(value.trim());
+  }
+
   /// Validates person or business name.
   static String? name(String? value) {
     if (value == null || value.trim().isEmpty) {

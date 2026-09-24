@@ -63,8 +63,7 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
     final ledgerCustomer = customer == null || liveBalance == null
         ? customer
         : customer.copyWith(balance: liveBalance);
-    final isSharedLedger =
-        ledgerCustomer != null &&
+    final isSharedLedger = ledgerCustomer != null &&
         currentUserId != null &&
         ledgerCustomer.userId != currentUserId;
 
@@ -97,13 +96,13 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
           isSharedLedger: isSharedLedger,
           transactionsAsync: transactionsAsync,
           transactions: displayTransactions,
-          onRetry: () => ref.invalidate(transactionsStreamProvider(ledgerCustomer.id)),
+          onRetry: () =>
+              ref.invalidate(transactionsStreamProvider(ledgerCustomer.id)),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: isSharedLedger
-          ? null
-          : _buildAddEntryButton(context, ledgerCustomer),
+      floatingActionButton:
+          isSharedLedger ? null : _buildAddEntryButton(context, ledgerCustomer),
     );
   }
 
@@ -191,7 +190,8 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
           IconButton(
             icon: const Icon(Icons.edit_outlined),
             tooltip: 'Edit Customer',
-            onPressed: () => context.push(AppRoutes.editCustomer, extra: customer),
+            onPressed: () =>
+                context.push(AppRoutes.editCustomer, extra: customer),
           ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf_outlined),
@@ -206,7 +206,8 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
         background: _HeaderContent(
           customer: customer,
           isSharedLedger: isSharedLedger,
-          onSharePdf: isSharedLedger ? null : () => _exportPdf(context, customer),
+          onSharePdf:
+              isSharedLedger ? null : () => _exportPdf(context, customer),
         ),
       ),
     );
@@ -232,7 +233,8 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
     CustomerEntity customer, {
     TransactionType? initialType,
   }) async {
-    final savedTransaction = await Navigator.of(context).push<TransactionEntity>(
+    final savedTransaction =
+        await Navigator.of(context).push<TransactionEntity>(
       PageRouteBuilder(
         pageBuilder: (ctx, anim, _) => AddEditTransactionPage(
           customerId: customer.id,
@@ -299,7 +301,8 @@ class _HeaderContent extends StatelessWidget {
               decoration: BoxDecoration(
                 color: accentColor.withOpacity(0.12),
                 shape: BoxShape.circle,
-                border: Border.all(color: accentColor.withOpacity(0.4), width: 2),
+                border:
+                    Border.all(color: accentColor.withOpacity(0.4), width: 2),
               ),
               child: Center(
                 child: Text(
@@ -315,7 +318,8 @@ class _HeaderContent extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               customer.name,
-              style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700),
+              style: GoogleFonts.poppins(
+                  fontSize: 18, fontWeight: FontWeight.w700),
             ),
             Text(
               customer.phone,
@@ -324,10 +328,20 @@ class _HeaderContent extends StatelessWidget {
                 color: cs.onSurface.withOpacity(0.45),
               ),
             ),
+            if (customer.secondaryPhone != null &&
+                customer.secondaryPhone!.isNotEmpty)
+              Text(
+                'Alt ${AppFormatters.phone(customer.secondaryPhone!)}',
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  color: cs.onSurface.withOpacity(0.38),
+                ),
+              ),
             if (isSharedLedger) ...[
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: cs.primary.withOpacity(0.07),
                   borderRadius: BorderRadius.circular(16),
@@ -337,22 +351,27 @@ class _HeaderContent extends StatelessWidget {
                   Text(
                     'Added by ${customer.ownerName ?? 'Unknown'}',
                     style: GoogleFonts.poppins(
-                      fontSize: 13, fontWeight: FontWeight.w700, color: cs.primary),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: cs.primary),
                   ),
-                  if (customer.ownerPhone != null && customer.ownerPhone!.isNotEmpty)
+                  if (customer.ownerPhone != null &&
+                      customer.ownerPhone!.isNotEmpty)
                     Text(
                       customer.ownerPhone!,
                       style: GoogleFonts.poppins(
-                        fontSize: 11, color: cs.primary.withOpacity(0.7)),
+                          fontSize: 11, color: cs.primary.withOpacity(0.7)),
                     ),
                   const SizedBox(height: 4),
                   Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.lock_outline_rounded, size: 10, color: cs.primary.withOpacity(0.6)),
+                    Icon(Icons.lock_outline_rounded,
+                        size: 10, color: cs.primary.withOpacity(0.6)),
                     const SizedBox(width: 4),
                     Text('Shared ledger · Read only',
-                      style: GoogleFonts.poppins(
-                        fontSize: 10, color: cs.primary.withOpacity(0.6),
-                        fontWeight: FontWeight.w600)),
+                        style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            color: cs.primary.withOpacity(0.6),
+                            fontWeight: FontWeight.w600)),
                   ]),
                 ]),
               ),
@@ -449,6 +468,7 @@ class _QuickActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final secondaryPhone = customer.secondaryPhone;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -466,14 +486,16 @@ class _QuickActions extends StatelessWidget {
           }
         }),
         const SizedBox(width: 8),
-        _Btn(Icons.notifications_outlined, 'Remind', const Color(0xFFD97706), () async {
+        _Btn(Icons.notifications_outlined, 'Remind', const Color(0xFFD97706),
+            () async {
           final bal = customer.balance;
           final amt = bal.abs().toStringAsFixed(0);
           final msg = bal > 0
               ? 'Hi ${customer.name}, friendly reminder: you owe me ₹$amt. Please clear when convenient. - Sent via LenDen'
               : 'Hi ${customer.name}, reminder: I owe you ₹$amt. Will settle soon. - Sent via LenDen';
           final encoded = Uri.encodeComponent(msg);
-          final waUri  = Uri.parse('whatsapp://send?phone=91${customer.phone}&text=$encoded');
+          final waUri = Uri.parse(
+              'whatsapp://send?phone=91${customer.phone}&text=$encoded');
           final smsUri = Uri.parse('sms:${customer.phone}?body=$encoded');
           if (await canLaunchUrl(waUri)) {
             await launchUrl(waUri, mode: LaunchMode.externalApplication);
@@ -483,10 +505,13 @@ class _QuickActions extends StatelessWidget {
         }),
         const SizedBox(width: 8),
         _Btn(Icons.copy_outlined, 'Copy', Colors.grey.shade600, () {
-          Clipboard.setData(ClipboardData(text: customer.phone));
+          final copied = secondaryPhone != null && secondaryPhone.isNotEmpty
+              ? '${customer.phone}, $secondaryPhone'
+              : customer.phone;
+          Clipboard.setData(ClipboardData(text: copied));
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Number copied!'),
+              content: Text('Number copied'),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -569,14 +594,18 @@ class _TransactionListBody extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                isSharedLedger ? 'Shared Transaction History' : 'Transaction History',
-                style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700),
+                isSharedLedger
+                    ? 'Shared Transaction History'
+                    : 'Transaction History',
+                style: GoogleFonts.poppins(
+                    fontSize: 15, fontWeight: FontWeight.w700),
               ),
               Text(
                 '${transactions.length} entries',
                 style: GoogleFonts.poppins(
                   fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.45),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.45),
                 ),
               ),
             ],
@@ -584,7 +613,9 @@ class _TransactionListBody extends StatelessWidget {
         ),
         Expanded(
           child: transactionsAsync.when(
-            loading: () => transactions.isNotEmpty ? _buildGroupedList(context) : _buildShimmer(),
+            loading: () => transactions.isNotEmpty
+                ? _buildGroupedList(context)
+                : _buildShimmer(),
             error: (e, _) => transactions.isNotEmpty
                 ? _buildGroupedList(context)
                 : _buildError(context, e.toString()),
@@ -611,32 +642,37 @@ class _TransactionListBody extends StatelessWidget {
       children: [
         // Column headers
         _LedgerColumnHeader(),
-        Expanded(child: ListView.builder(
-      padding: const EdgeInsets.only(bottom: 120),
-      itemCount: grouped.length,
-      itemBuilder: (ctx, groupIdx) {
-        final month = grouped.keys.elementAt(groupIdx);
-        final items = grouped[month]!;
-        final gave =
-            items.where((t) => t.isGave).fold(0.0, (sum, t) => sum + t.amount);
-        final got =
-            items.where((t) => t.isGot).fold(0.0, (sum, t) => sum + t.amount);
+        Expanded(
+            child: ListView.builder(
+          padding: const EdgeInsets.only(bottom: 120),
+          itemCount: grouped.length,
+          itemBuilder: (ctx, groupIdx) {
+            final month = grouped.keys.elementAt(groupIdx);
+            final items = grouped[month]!;
+            final gave = items
+                .where((t) => t.isGave)
+                .fold(0.0, (sum, t) => sum + t.amount);
+            final got = items
+                .where((t) => t.isGot)
+                .fold(0.0, (sum, t) => sum + t.amount);
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _MonthHeader(month: month, gave: gave, got: got),
-            ...items.asMap().entries.map((entry) {
-              return TransactionTile(
-                transaction: entry.value,
-                animationIndex: entry.key,
-                invertPerspective: isSharedLedger,
-              );
-            }),
-          ],
-        );
-      },
-    )),],);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _MonthHeader(month: month, gave: gave, got: got),
+                ...items.asMap().entries.map((entry) {
+                  return TransactionTile(
+                    transaction: entry.value,
+                    animationIndex: entry.key,
+                    invertPerspective: isSharedLedger,
+                  );
+                }),
+              ],
+            );
+          },
+        )),
+      ],
+    );
   }
 
   Widget _buildEmpty(BuildContext context) {
@@ -663,7 +699,8 @@ class _TransactionListBody extends StatelessWidget {
             const SizedBox(height: 20),
             Text(
               'No transactions yet',
-              style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700),
+              style: GoogleFonts.poppins(
+                  fontSize: 16, fontWeight: FontWeight.w700),
             ).animate().fadeIn(delay: 200.ms),
             const SizedBox(height: 8),
             Text(
@@ -690,7 +727,8 @@ class _TransactionListBody extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.cloud_off_rounded, size: 48, color: AppColors.danger),
+            const Icon(Icons.cloud_off_rounded,
+                size: 48, color: AppColors.danger),
             const SizedBox(height: 12),
             Text(
               'Could not load transactions',
@@ -740,43 +778,54 @@ class _LedgerColumnHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs     = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color:        isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
+        color: isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
+        border:
+            Border.all(color: isDark ? AppColors.darkBorder : AppColors.border),
       ),
       child: Row(children: [
-        Expanded(flex: 4,
+        Expanded(
+          flex: 4,
           child: Padding(
             padding: const EdgeInsets.only(left: 12),
             child: Text('DATE / NOTE',
-                style: GoogleFonts.poppins(fontSize: 10,
+                style: GoogleFonts.poppins(
+                    fontSize: 10,
                     fontWeight: FontWeight.w700,
                     color: cs.onSurface.withOpacity(0.45),
                     letterSpacing: 0.8)),
           ),
         ),
-        Container(width: 1, height: 16,
+        Container(
+            width: 1,
+            height: 16,
             color: isDark ? AppColors.darkBorder : AppColors.border),
-        Expanded(flex: 3,
+        Expanded(
+          flex: 3,
           child: Text('GAVE ↑',
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(fontSize: 10,
+              style: GoogleFonts.poppins(
+                  fontSize: 10,
                   fontWeight: FontWeight.w700,
                   color: AppColors.success.withOpacity(0.8),
                   letterSpacing: 0.8)),
         ),
-        Container(width: 1, height: 16,
+        Container(
+            width: 1,
+            height: 16,
             color: isDark ? AppColors.darkBorder : AppColors.border),
-        Expanded(flex: 3,
+        Expanded(
+          flex: 3,
           child: Text('GOT ↓',
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(fontSize: 10,
+              style: GoogleFonts.poppins(
+                  fontSize: 10,
                   fontWeight: FontWeight.w700,
                   color: AppColors.danger.withOpacity(0.8),
                   letterSpacing: 0.8)),

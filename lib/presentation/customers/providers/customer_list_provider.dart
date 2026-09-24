@@ -14,8 +14,8 @@ class CustomerListState {
   final String? deletingId;
 
   const CustomerListState({
-    this.isSearching     = false,
-    this.searchQuery     = '',
+    this.isSearching = false,
+    this.searchQuery = '',
     this.isSearchLoading = false,
     this.searchResults,
     this.errorMessage,
@@ -31,17 +31,18 @@ class CustomerListState {
     List<CustomerEntity>? searchResults,
     String? errorMessage,
     String? deletingId,
-    bool clearError    = false,
+    bool clearError = false,
     bool clearDeleting = false,
-    bool clearSearch   = false,
-  }) => CustomerListState(
-    isSearching:     isSearching     ?? this.isSearching,
-    searchQuery:     searchQuery     ?? this.searchQuery,
-    isSearchLoading: isSearchLoading ?? this.isSearchLoading,
-    searchResults:   clearSearch  ? null : searchResults ?? this.searchResults,
-    errorMessage:    clearError   ? null : errorMessage  ?? this.errorMessage,
-    deletingId:      clearDeleting ? null : deletingId   ?? this.deletingId,
-  );
+    bool clearSearch = false,
+  }) =>
+      CustomerListState(
+        isSearching: isSearching ?? this.isSearching,
+        searchQuery: searchQuery ?? this.searchQuery,
+        isSearchLoading: isSearchLoading ?? this.isSearchLoading,
+        searchResults: clearSearch ? null : searchResults ?? this.searchResults,
+        errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
+        deletingId: clearDeleting ? null : deletingId ?? this.deletingId,
+      );
 }
 
 // ── Notifier ──────────────────────────────────────────────────────────────────
@@ -72,8 +73,10 @@ class CustomerListNotifier extends StateNotifier<CustomerListState> {
     final visibleCustomers = _ref.read(visibleCustomersProvider);
     final lowerQuery = query.toLowerCase();
     final list = visibleCustomers.where((customer) {
+      final secondaryPhone = customer.secondaryPhone ?? '';
       return customer.name.toLowerCase().contains(lowerQuery) ||
-          customer.phone.contains(query);
+          customer.phone.contains(query) ||
+          secondaryPhone.contains(query);
     }).toList();
 
     state = state.copyWith(

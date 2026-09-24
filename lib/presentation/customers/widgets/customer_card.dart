@@ -63,9 +63,8 @@ class CustomerCard extends StatelessWidget {
       balanceIcon = Icons.check_circle_outline_rounded;
     }
 
-    final amountText = isSettled
-        ? 'Cleared'
-        : '₹${_formatAmount(effectiveBalance.abs())}';
+    final amountText =
+        isSettled ? 'Cleared' : '₹${_formatAmount(effectiveBalance.abs())}';
 
     return GestureDetector(
       onTap: isDeleting ? null : onTap,
@@ -120,6 +119,18 @@ class CustomerCard extends StatelessWidget {
                           style: GoogleFonts.poppins(
                               fontSize: 12,
                               color: cs.onSurface.withOpacity(0.5))),
+                      if (customer.secondaryPhone != null &&
+                          customer.secondaryPhone!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Text(
+                            'Alt ${AppFormatters.phone(customer.secondaryPhone!)}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: cs.onSurface.withOpacity(0.42),
+                            ),
+                          ),
+                        ),
                       if (showSharedBadge) ...[
                         const SizedBox(height: 6),
                         Container(

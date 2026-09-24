@@ -8,59 +8,124 @@ service cloud.firestore {
     function isOwner(uid) {
       return isSignedIn() && request.auth.uid == uid;
     }
+    function isOptionalString(field) {
+      return !(field in request.resource.data) || request.resource.data[field] is string;
+    }
+    function hasValidCustomerFields() {
+      return request.resource.data.keys().hasOnly([
+          'userId',
+          'name',
+          'phone',
+          'secondaryPhone',
+          'address',
+          'notes',
+          'ownerName',
+          'ownerPhone',
+          'balance',
+          'createdAt',
+          'updatedAt',
+          'nameLower',
+          'namePrefix',
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 50
+        && request.resource.data.phone is string
+        && request.resource.data.phone.matches('^[6-9][0-9]{9}$')
+        && isOptionalString('secondaryPhone')
+        && (!('secondaryPhone' in request.resource.data)
+            || request.resource.data.secondaryPhone.matches('^[6-9][0-9]{9}$'))
+        && isOptionalString('address')
+        && isOptionalString('notes')
+        && isOptionalString('ownerName')
+        && isOptionalString('ownerPhone')
+        && request.resource.data.balance is number;
+    }
+    function hasValidTransactionFields() {
+      return request.resource.data.keys().hasOnly([
+          'customerId',
+          'userId',
+          'amount',
+          'type',
+          'note',
+          'date',
+          'createdAt',
+          'yearMonth',
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.customerId is string
+        && request.resource.data.customerId.size() > 0
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.amount <= 10000000
+        && request.resource.data.type in ['gave', 'got']
+        && isOptionalString('note')
+        && request.resource.data.date is timestamp
+        && request.resource.data.createdAt is timestamp;
+    }
+    function hasValidCashbookFields() {
+      return request.resource.data.keys().hasOnly([
+          'userId',
+          'type',
+          'amount',
+          'note',
+          'date',
+          'createdAt',
+          'yearMonthDay',
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.amount <= 10000000
+        && request.resource.data.type in ['in', 'out']
+        && isOptionalString('note')
+        && request.resource.data.date is timestamp
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.yearMonthDay is string;
+    }
 
     // ── Users ─────────────────────────────────────────────────────────────
     match /users/{userId} {
       allow read:  if isOwner(userId);
-      allow write: if isOwner(userId);
+      allow create, update: if isOwner(userId);
+      allow delete: if false;
     }
 
     // ── Customers ─────────────────────────────────────────────────────────
     match /customers/{customerId} {
-      allow read:   if isSignedIn()
-                      && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn()
-                      && request.resource.data.userId == request.auth.uid
-                      && request.resource.data.name is string
-                      && request.resource.data.name.size() > 0
-                      && request.resource.data.phone is string;
+      allow read:   if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && hasValidCustomerFields();
       allow update: if isSignedIn()
                       && resource.data.userId == request.auth.uid
-                      && request.resource.data.userId == request.auth.uid;
+                      && request.resource.data.userId == resource.data.userId
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && hasValidCustomerFields();
       allow delete: if false;
     }
 
     // ── Transactions ──────────────────────────────────────────────────────
     match /transactions/{transactionId} {
-      allow read:   if isSignedIn()
-                      && resource.data.userId == request.auth.uid;
+      allow read:   if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSignedIn()
-                      && request.resource.data.userId == request.auth.uid
-                      && request.resource.data.amount is number
-                      && request.resource.data.amount > 0
-                      && request.resource.data.type in ['gave', 'got'];
+                      && hasValidTransactionFields()
+                      && exists(/databases/$(database)/documents/customers/$(request.resource.data.customerId))
+                      && get(/databases/$(database)/documents/customers/$(request.resource.data.customerId)).data.userId == request.auth.uid;
       allow update: if isSignedIn()
                       && resource.data.userId == request.auth.uid
-                      && request.resource.data.userId == request.auth.uid
-                      && request.resource.data.amount is number
-                      && request.resource.data.amount > 0;
+                      && request.resource.data.userId == resource.data.userId
+                      && request.resource.data.customerId == resource.data.customerId
+                      && request.resource.data.createdAt == resource.data.createdAt
+                      && hasValidTransactionFields();
       allow delete: if false;
     }
 
     // ── Cashbook ──────────────────────────────────────────────────────────
-    // read uses isSignedIn() only (not resource.data) because resource.data
-    // is unavailable during list/query operations — would cause permission-denied.
-    // Security is enforced by the query filtering userId client-side.
     match /cashbook/{entryId} {
-      allow read:   if isSignedIn();
-      allow create: if isSignedIn()
-                      && request.resource.data.userId == request.auth.uid
-                      && request.resource.data.amount is number
-                      && request.resource.data.amount > 0
-                      && request.resource.data.type in ['in', 'out'];
+      allow read:   if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && hasValidCashbookFields();
       allow update: if false;
-      allow delete: if isSignedIn()
-                      && resource.data.userId == request.auth.uid;
+      allow delete: if false;
     }
   }
 }

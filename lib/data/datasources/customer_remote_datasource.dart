@@ -13,7 +13,7 @@ class CustomerRemoteDataSource {
     required FirebaseFirestore firestore,
     Logger? logger,
   })  : _firestore = firestore,
-        _logger    = logger ?? Logger();
+        _logger = logger ?? Logger();
 
   CollectionReference<Map<String, dynamic>> get _col =>
       _firestore.collection(AppConstants.colCustomers);
@@ -26,18 +26,15 @@ class CustomerRemoteDataSource {
         .where('userId', isEqualTo: userId)
         .snapshots()
         .handleError((error) {
-          _logger.e('watchCustomers error: $error');
-          // Return empty snapshot on error rather than crashing
-        })
-        .map((snapshot) {
-          final list = snapshot.docs
-              .map((doc) => CustomerModel.fromFirestore(doc))
-              .toList();
-          // Client-side sort — works even without Firestore index
-          list.sort((a, b) =>
-              a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-          return list;
-        });
+      _logger.e('watchCustomers error: $error');
+      // Return empty snapshot on error rather than crashing
+    }).map((snapshot) {
+      final list =
+          snapshot.docs.map((doc) => CustomerModel.fromFirestore(doc)).toList();
+      // Client-side sort — works even without Firestore index
+      list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return list;
+    });
   }
 
   Stream<List<CustomerModel>> watchCustomersByPhone(String phone) {
@@ -45,23 +42,20 @@ class CustomerRemoteDataSource {
         .where('phone', isEqualTo: phone)
         .snapshots()
         .handleError((error) {
-          _logger.e('watchCustomersByPhone error: $error');
-        })
-        .map((snapshot) {
-          final list = snapshot.docs
-              .map((doc) => CustomerModel.fromFirestore(doc))
-              .toList();
-          list.sort((a, b) =>
-              a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-          return list;
-        });
+      _logger.e('watchCustomersByPhone error: $error');
+    }).map((snapshot) {
+      final list =
+          snapshot.docs.map((doc) => CustomerModel.fromFirestore(doc)).toList();
+      list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return list;
+    });
   }
 
   // ── Add ───────────────────────────────────────────────────────────────────
   Future<CustomerModel> addCustomer(CustomerModel customer) async {
     try {
       final docRef = await _col.add(customer.toFirestore());
-      final doc    = await docRef.get();
+      final doc = await docRef.get();
       _logger.i('Customer added: ${docRef.id}');
       return CustomerModel.fromFirestore(doc);
     } on FirebaseException catch (e) {
@@ -73,20 +67,31 @@ class CustomerRemoteDataSource {
   // ── Update ────────────────────────────────────────────────────────────────
   Future<CustomerModel> updateCustomer(CustomerModel customer) async {
     try {
-      await _col.doc(customer.id).update(customer.toFirestore());
+      final data = customer.toFirestore();
+      if (customer.secondaryPhone == null || customer.secondaryPhone!.isEmpty) {
+        data['secondaryPhone'] = FieldValue.delete();
+      }
+      if (customer.address == null || customer.address!.isEmpty) {
+        data['address'] = FieldValue.delete();
+      }
+      if (customer.notes == null || customer.notes!.isEmpty) {
+        data['notes'] = FieldValue.delete();
+      }
+      await _col.doc(customer.id).update(data);
       final doc = await _col.doc(customer.id).get();
       _logger.i('Customer updated: ${customer.id}');
       return CustomerModel.fromFirestore(doc);
     } on FirebaseException catch (e) {
       _logger.e('updateCustomer: ${e.code}');
-      throw AppException('Failed to update customer: ${e.message}', code: e.code);
+      throw AppException('Failed to update customer: ${e.message}',
+          code: e.code);
     }
   }
 
   // ── Delete (with cascade) ─────────────────────────────────────────────────
   Future<void> deleteCustomer(String customerId) async {
     try {
-      final batch  = _firestore.batch();
+      final batch = _firestore.batch();
       batch.delete(_col.doc(customerId));
 
       final txSnap = await _firestore
@@ -97,10 +102,12 @@ class CustomerRemoteDataSource {
         batch.delete(doc.reference);
       }
       await batch.commit();
-      _logger.i('Customer $customerId deleted with ${txSnap.docs.length} transactions');
+      _logger.i(
+          'Customer $customerId deleted with ${txSnap.docs.length} transactions');
     } on FirebaseException catch (e) {
       _logger.e('deleteCustomer: ${e.code}');
-      throw AppException('Failed to delete customer: ${e.message}', code: e.code);
+      throw AppException('Failed to delete customer: ${e.message}',
+          code: e.code);
     }
   }
 
@@ -136,7 +143,8 @@ class CustomerRemoteDataSource {
           .map((doc) => CustomerModel.fromFirestore(doc))
           .toList();
     } on FirebaseException catch (e) {
-      _logger.w('searchCustomers Firestore query failed (${e.code}), falling back');
+      _logger.w(
+          'searchCustomers Firestore query failed (${e.code}), falling back');
       // Fallback: fetch all and filter client-side
       try {
         final all = await _col.where('userId', isEqualTo: userId).get();

@@ -9,17 +9,17 @@ import '../../core/errors/exceptions.dart';
 import '../models/user_model.dart';
 
 class AuthRemoteDataSource {
-  final FirebaseAuth      _auth;
+  final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
-  final Logger            _logger;
+  final Logger _logger;
 
   AuthRemoteDataSource({
     required FirebaseAuth auth,
     required FirebaseFirestore firestore,
     Logger? logger,
-  })  : _auth      = auth,
+  })  : _auth = auth,
         _firestore = firestore,
-        _logger    = logger ?? Logger();
+        _logger = logger ?? Logger();
 
   // ── Send OTP ──────────────────────────────────────────────────────────────
 
@@ -36,7 +36,7 @@ class AuthRemoteDataSource {
           _logger.e('OTP send failed: ${e.code}');
           if (!completer.isCompleted) {
             completer.completeError(
-              AppException(_mapAuthError(e.code, e.message), code: e.code));
+                AppException(_mapAuthError(e.code, e.message), code: e.code));
           }
         },
         codeSent: (String verificationId, int? resendToken) {
@@ -92,14 +92,13 @@ class AuthRemoteDataSource {
     }
 
     final model = UserModel(
-      id:           userId,
-      name:         name.trim(),
-      phone:        phone,
-      email:        (email?.trim().isEmpty ?? true) ? null : email!.trim(),
-      businessName: (businessName?.trim().isEmpty ?? true)
-                    ? null
-                    : businessName!.trim(),
-      createdAt:    DateTime.now(),
+      id: userId,
+      name: name.trim(),
+      phone: phone,
+      email: (email?.trim().isEmpty ?? true) ? null : email!.trim(),
+      businessName:
+          (businessName?.trim().isEmpty ?? true) ? null : businessName!.trim(),
+      createdAt: DateTime.now(),
     );
 
     Exception? lastError;
@@ -121,10 +120,10 @@ class AuthRemoteDataSource {
 
         _logger.i('Profile saved successfully on attempt $attempt');
         return model;
-
       } on FirebaseException catch (e) {
         _logger.w('saveUserProfile attempt $attempt: ${e.code} — ${e.message}');
-        lastError = AppException(_mapFirestoreError(e.code, e.message), code: e.code);
+        lastError =
+            AppException(_mapFirestoreError(e.code, e.message), code: e.code);
 
         // Only retry on permission-denied (token timing issue)
         // Other errors (network, invalid data) fail fast
@@ -139,10 +138,8 @@ class AuthRemoteDataSource {
 
   Future<UserModel?> getUserProfile(String userId) async {
     try {
-      final doc = await _firestore
-          .collection(AppConstants.colUsers)
-          .doc(userId)
-          .get();
+      final doc =
+          await _firestore.collection(AppConstants.colUsers).doc(userId).get();
       if (!doc.exists || doc.data() == null) return null;
       return UserModel.fromFirestore(doc);
     } catch (e) {
@@ -162,24 +159,45 @@ class AuthRemoteDataSource {
   // ── Error mapping ─────────────────────────────────────────────────────────
 
   String _mapAuthError(String? code, String? message) {
+    final normalizedMessage = message?.toLowerCase() ?? '';
+    if (code == 'billing-not-enabled' ||
+        normalizedMessage.contains('billing_not_enabled') ||
+        normalizedMessage.contains('billing not enabled')) {
+      return 'OTP service is not active because Firebase billing is not enabled. Please enable billing for this Firebase project and try again.';
+    }
+
     switch (code) {
-      case 'invalid-phone-number':   return 'Invalid phone number.';
-      case 'too-many-requests':      return 'Too many attempts. Please wait a few minutes.';
-      case 'invalid-verification-code': return 'Incorrect OTP. Please try again.';
-      case 'invalid-verification-id':   return 'OTP expired. Please request a new one.';
-      case 'session-expired':        return 'OTP expired. Please request a new one.';
-      case 'quota-exceeded':         return 'SMS quota exceeded. Try again tomorrow.';
-      case 'network-request-failed': return 'No internet. Please check your connection.';
-      case 'app-not-authorized':     return 'App not authorised. Add SHA-1 to Firebase.';
-      default: return message ?? 'Authentication failed. Please try again.';
+      case 'invalid-phone-number':
+        return 'Invalid phone number.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please wait a few minutes.';
+      case 'invalid-verification-code':
+        return 'Incorrect OTP. Please try again.';
+      case 'invalid-verification-id':
+        return 'OTP expired. Please request a new one.';
+      case 'session-expired':
+        return 'OTP expired. Please request a new one.';
+      case 'quota-exceeded':
+        return 'SMS quota exceeded. Try again tomorrow.';
+      case 'network-request-failed':
+        return 'No internet. Please check your connection.';
+      case 'operation-not-allowed':
+        return 'Phone sign-in is not enabled in Firebase Authentication.';
+      case 'app-not-authorized':
+        return 'App not authorised. Add SHA-1 to Firebase.';
+      default:
+        return message ?? 'Authentication failed. Please try again.';
     }
   }
 
   String _mapFirestoreError(String? code, String? message) {
     switch (code) {
-      case 'permission-denied': return 'Permission denied. Retrying…';
-      case 'unavailable':       return 'Server unavailable. Check your internet.';
-      default: return message ?? 'Failed to save. Please try again.';
+      case 'permission-denied':
+        return 'Permission denied. Retrying…';
+      case 'unavailable':
+        return 'Server unavailable. Check your internet.';
+      default:
+        return message ?? 'Failed to save. Please try again.';
     }
   }
 }
