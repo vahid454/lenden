@@ -17,12 +17,14 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/pdf_export_service.dart';
 import '../../../core/services/share_service.dart';
 import '../../../core/utils/app_formatters.dart';
+import '../../../core/utils/payment_reminder_message.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/payment_promise_entity.dart';
 import '../../../domain/entities/transaction_entity.dart';
 import '../../transactions/pages/add_edit_transaction_page.dart';
 import '../../transactions/widgets/transaction_tile.dart';
 import '../widgets/payment_promise_sheet.dart';
+import '../widgets/customer_avatar_image.dart';
 
 class CustomerDetailPage extends ConsumerStatefulWidget {
   final String customerId;
@@ -234,11 +236,20 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
           nextPromise: ref.read(nextOpenPromiseByCustomerProvider)[customer.id],
           onSetPromise:
               isSharedLedger ? null : () => _setPromise(context, customer),
+          senderName: _senderName,
           onSharePdf:
               isSharedLedger ? null : () => _exportPdf(context, customer),
         ),
       ),
     );
+  }
+
+  String get _senderName {
+    final user = ref.read(currentUserProvider);
+    final business = user?.businessName?.trim() ?? '';
+    if (business.isNotEmpty) return business;
+    final owner = user?.name.trim() ?? '';
+    return owner.isNotEmpty ? owner : 'LenDen';
   }
 
   Widget _buildAddEntryButton(
@@ -369,6 +380,7 @@ class _HeaderContent extends StatelessWidget {
   final Future<void> Function()? onSharePdf;
   final PaymentPromiseEntity? nextPromise;
   final VoidCallback? onSetPromise;
+  final String senderName;
 
   const _HeaderContent({
     required this.customer,
@@ -376,6 +388,7 @@ class _HeaderContent extends StatelessWidget {
     required this.onSharePdf,
     required this.nextPromise,
     required this.onSetPromise,
+    required this.senderName,
   });
 
   @override
@@ -392,25 +405,15 @@ class _HeaderContent extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 56, 20, 0),
         child: Column(
           children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: accentColor.withOpacity(0.12),
-                shape: BoxShape.circle,
-                border:
-                    Border.all(color: accentColor.withOpacity(0.4), width: 2),
-              ),
-              child: Center(
-                child: Text(
-                  customer.initials,
-                  style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: accentColor,
-                  ),
-                ),
-              ),
+            CustomerAvatarImage(
+              initials: customer.initials,
+              photoPath: customer.photoPath,
+              color: accentColor,
+              size: 88,
+              fontSize: 28,
+              borderWidth: 2,
+              expandable: true,
+              viewerTitle: customer.name,
             ),
             const SizedBox(height: 8),
             Text(
@@ -485,6 +488,7 @@ class _HeaderContent extends StatelessWidget {
               onSharePdf: onSharePdf,
               nextPromise: nextPromise,
               onSetPromise: onSetPromise,
+              senderName: senderName,
             ),
             const SizedBox(height: 10),
           ],
@@ -560,6 +564,7 @@ class _QuickActions extends StatelessWidget {
   final Future<void> Function()? onSharePdf;
   final PaymentPromiseEntity? nextPromise;
   final VoidCallback? onSetPromise;
+  final String senderName;
 
   const _QuickActions({
     required this.customer,
@@ -567,6 +572,7 @@ class _QuickActions extends StatelessWidget {
     required this.onSharePdf,
     required this.nextPromise,
     required this.onSetPromise,
+    required this.senderName,
   });
 
   @override
@@ -592,30 +598,29 @@ class _QuickActions extends StatelessWidget {
               }
             }),
             const SizedBox(width: 8),
-            _Btn(
-                Icons.notifications_outlined, 'Remind', const Color(0xFFD97706),
-                () async {
-              final bal = customer.balance;
-              final promise = nextPromise;
-              final amt =
-                  (promise?.remainingAmount ?? bal.abs()).toStringAsFixed(0);
-              final dueText = promise == null
-                  ? ''
-                  : ' As discussed, you promised this on ${DateFormat('d MMM').format(promise.promisedDate)}.';
-              final msg = bal > 0
-                  ? 'Hi ${customer.name}, friendly reminder regarding your pending ₹$amt payment.$dueText Please send it when convenient. - LenDen'
-                  : 'Hi ${customer.name}, reminder: I owe you ₹$amt. Will settle soon. - Sent via LenDen';
-              final encoded = Uri.encodeComponent(msg);
-              final waUri = Uri.parse(
-                  'whatsapp://send?phone=91${customer.phone}&text=$encoded');
-              final smsUri = Uri.parse('sms:${customer.phone}?body=$encoded');
-              if (await canLaunchUrl(waUri)) {
-                await launchUrl(waUri, mode: LaunchMode.externalApplication);
-              } else if (await canLaunchUrl(smsUri)) {
-                await launchUrl(smsUri);
-              }
-            }),
-            const SizedBox(width: 8),
+            if (!customer.isSettled) ...[
+              _Btn(Icons.notifications_outlined, 'Remind',
+                  const Color(0xFFD97706), () async {
+                final promise = nextPromise;
+                final msg = PaymentReminderMessage.build(
+                  customerName: customer.name,
+                  senderName: senderName,
+                  amount: promise?.remainingAmount ?? customer.absBalance,
+                  ownerOwes: customer.balance < 0,
+                  dueDate: promise?.promisedDate,
+                );
+                final encoded = Uri.encodeComponent(msg);
+                final waUri = Uri.parse(
+                    'whatsapp://send?phone=91${customer.phone}&text=$encoded');
+                final smsUri = Uri.parse('sms:${customer.phone}?body=$encoded');
+                if (await canLaunchUrl(waUri)) {
+                  await launchUrl(waUri, mode: LaunchMode.externalApplication);
+                } else if (await canLaunchUrl(smsUri)) {
+                  await launchUrl(smsUri);
+                }
+              }),
+              const SizedBox(width: 8),
+            ],
             if (!isSharedLedger && onSetPromise != null) ...[
               _Btn(
                 Icons.event_available_outlined,
@@ -692,6 +697,7 @@ class _Btn extends StatelessWidget {
 }
 
 class _PromisePanel extends StatelessWidget {
+  final CustomerEntity customer;
   final List<PaymentPromiseEntity> promises;
   final VoidCallback? onSetPromise;
   final ValueChanged<PaymentPromiseEntity>? onAddPayment;
@@ -699,6 +705,7 @@ class _PromisePanel extends StatelessWidget {
   final ValueChanged<PaymentPromiseEntity>? onContact;
 
   const _PromisePanel({
+    required this.customer,
     required this.promises,
     required this.onSetPromise,
     required this.onAddPayment,
@@ -709,7 +716,9 @@ class _PromisePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final open = promises.where((promise) => promise.isOpen).toList()
+    final open = (customer.balance <= 0
+        ? <PaymentPromiseEntity>[]
+        : promises.where((promise) => promise.isOpen).toList())
       ..sort((a, b) => a.promisedDate.compareTo(b.promisedDate));
     final featured = open.isNotEmpty ? open.first : null;
     final cs = Theme.of(context).colorScheme;
@@ -753,7 +762,9 @@ class _PromisePanel extends StatelessWidget {
               child: Text(
                 promises.isEmpty
                     ? 'No payment date promised yet.'
-                    : 'No open promise. ${promises.length} commitment${promises.length == 1 ? '' : 's'} kept in history.',
+                    : customer.balance <= 0
+                        ? 'Account settled. Promise history is kept, but no follow-up is needed.'
+                        : 'No open promise. ${promises.length} commitment${promises.length == 1 ? '' : 's'} kept in history.',
                 style: GoogleFonts.poppins(
                   fontSize: 12,
                   color: cs.onSurface.withValues(alpha: 0.56),
@@ -931,6 +942,7 @@ class _TransactionListBody extends StatelessWidget {
         const SizedBox(height: 8),
         if (!isSharedLedger)
           _PromisePanel(
+            customer: customer,
             promises: promises,
             onSetPromise: onSetPromise,
             onAddPayment: onAddPayment,

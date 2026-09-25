@@ -22,6 +22,7 @@ service cloud.firestore {
           'secondaryPhone',
           'address',
           'notes',
+          'photoPath',
           'ownerName',
           'ownerPhone',
           'balance',
@@ -41,6 +42,7 @@ service cloud.firestore {
             || request.resource.data.secondaryPhone.matches('^[6-9][0-9]{9}$'))
         && isOptionalString('address')
         && isOptionalString('notes')
+        && isOptionalString('photoPath')
         && isOptionalString('ownerName')
         && isOptionalString('ownerPhone')
         && request.resource.data.balance is number;
@@ -117,6 +119,21 @@ service cloud.firestore {
         && isOptionalTimestamp('lastContactedAt')
         && request.resource.data.createdAt is timestamp;
     }
+    function hasReservedCustomerPhone(customerId) {
+      let key = request.auth.uid + '_' + request.resource.data.phone;
+      return existsAfter(/databases/$(database)/documents/customerPhoneKeys/$(key))
+          && getAfter(/databases/$(database)/documents/customerPhoneKeys/$(key)).data.userId == request.auth.uid
+          && getAfter(/databases/$(database)/documents/customerPhoneKeys/$(key)).data.phone == request.resource.data.phone
+          && getAfter(/databases/$(database)/documents/customerPhoneKeys/$(key)).data.customerId == customerId;
+    }
+    function hasDeterministicCustomerId(customerId) {
+      return customerId == request.auth.uid + '_' + request.resource.data.phone;
+    }
+    function hasValidCustomerPhotoPath(customerId) {
+      return !('photoPath' in request.resource.data)
+          || request.resource.data.photoPath == 'users/' + request.auth.uid
+              + '/customers/' + customerId + '/profile.jpg';
+    }
     function hasConsistentPaymentPromiseStatus() {
       return (request.resource.data.status == 'pending'
               && request.resource.data.fulfilledAmount == 0)
@@ -138,13 +155,39 @@ service cloud.firestore {
     // ── Customers ─────────────────────────────────────────────────────────
     match /customers/{customerId} {
       allow read:   if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && hasValidCustomerFields();
+      allow create: if isSignedIn()
+                    && hasValidCustomerFields()
+                    && hasValidCustomerPhotoPath(customerId)
+                    && hasDeterministicCustomerId(customerId);
       allow update: if isSignedIn()
                       && resource.data.userId == request.auth.uid
                       && request.resource.data.userId == resource.data.userId
                       && request.resource.data.createdAt == resource.data.createdAt
+                      && (request.resource.data.phone == resource.data.phone
+                          || hasReservedCustomerPhone(customerId))
+                      && hasValidCustomerPhotoPath(customerId)
                       && hasValidCustomerFields();
       allow delete: if false;
+    }
+
+    // ── Customer phone uniqueness ─────────────────────────────────────────
+    // A deterministic reservation makes each primary phone unique per owner.
+    match /customerPhoneKeys/{phoneKey} {
+      allow get: if isSignedIn()
+                 && phoneKey.matches('^' + request.auth.uid + '_[6-9][0-9]{9}$');
+      allow list: if isSignedIn()
+                  && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+                    && request.resource.data.keys().hasOnly([
+                      'userId', 'phone', 'customerId', 'createdAt'
+                    ])
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.phone.matches('^[6-9][0-9]{9}$')
+                    && request.resource.data.customerId is string
+                    && request.resource.data.customerId.size() > 0
+                    && request.resource.data.createdAt is timestamp
+                    && phoneKey == request.auth.uid + '_' + request.resource.data.phone;
+      allow update, delete: if false;
     }
 
     // ── Transactions ──────────────────────────────────────────────────────

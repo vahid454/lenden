@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_constants.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REUSABLE WIDGETS — shared across the entire app.
@@ -63,9 +64,8 @@ class AppButton extends StatelessWidget {
       AppButtonVariant.primary || AppButtonVariant.danger => ElevatedButton(
           onPressed: isLoading ? null : onPressed,
           style: ElevatedButton.styleFrom(
-            backgroundColor: variant == AppButtonVariant.danger
-                ? AppColors.danger
-                : null,
+            backgroundColor:
+                variant == AppButtonVariant.danger ? AppColors.danger : null,
             minimumSize: Size(width ?? double.infinity, height),
           ),
           child: child,
@@ -190,37 +190,50 @@ class LoadingOverlay extends StatelessWidget {
     return Stack(
       children: [
         child,
-        if (isLoading)
-          Container(
-            color: Colors.black38,
-            child: Center(
-              child: Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 24,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(),
-                      if (message != null) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          message!,
-                          style: GoogleFonts.poppins(fontSize: 14),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ],
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: !isLoading,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOut,
+              opacity: isLoading ? 1 : 0,
+              child: Container(
+                color: Colors.black38,
+                child: Center(
+                  child: Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 28,
+                        vertical: 22,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(strokeWidth: 2.5),
+                          ),
+                          if (message != null) ...[
+                            const SizedBox(height: 14),
+                            Text(
+                              message!,
+                              style: GoogleFonts.poppins(fontSize: 13),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
+        ),
       ],
     );
   }
@@ -320,7 +333,10 @@ class LenDenLogo extends StatelessWidget {
           height: size,
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [colorScheme.primary, colorScheme.primary.withOpacity(0.7)],
+              colors: [
+                colorScheme.primary,
+                colorScheme.primary.withOpacity(0.7)
+              ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -361,7 +377,7 @@ class LenDenLogo extends StatelessWidget {
         if (showTagline) ...[
           const SizedBox(height: 4),
           Text(
-            'Apna hisaab, apni marzi',
+            AppConstants.appTagline,
             style: GoogleFonts.poppins(
               fontSize: 13,
               color: colorScheme.onSurface.withOpacity(0.55),

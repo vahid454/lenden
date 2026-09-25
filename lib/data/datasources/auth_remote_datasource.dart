@@ -170,7 +170,7 @@ class AuthRemoteDataSource {
       case 'invalid-phone-number':
         return 'Invalid phone number.';
       case 'too-many-requests':
-        return 'Too many attempts. Please wait a few minutes.';
+        return 'Firebase temporarily limited OTP requests for this phone or device. Wait 15 minutes, then request one new OTP.';
       case 'invalid-verification-code':
         return 'Incorrect OTP. Please try again.';
       case 'invalid-verification-id':

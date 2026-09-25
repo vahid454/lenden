@@ -14,7 +14,7 @@ final customerRemoteDataSourceProvider =
     Provider<CustomerRemoteDataSource>((ref) {
   return CustomerRemoteDataSource(
     firestore: ref.watch(firestoreProvider),
-    logger:    ref.watch(loggerProvider),
+    logger: ref.watch(loggerProvider),
   );
 });
 
@@ -29,15 +29,15 @@ final customerRepositoryProvider = Provider<CustomerRepository>((ref) {
 
 // ── Use cases ─────────────────────────────────────────────────────────────────
 
-final watchCustomersUseCaseProvider  = Provider<WatchCustomersUseCase>(
+final watchCustomersUseCaseProvider = Provider<WatchCustomersUseCase>(
     (ref) => WatchCustomersUseCase(ref.watch(customerRepositoryProvider)));
-final addCustomerUseCaseProvider     = Provider<AddCustomerUseCase>(
+final addCustomerUseCaseProvider = Provider<AddCustomerUseCase>(
     (ref) => AddCustomerUseCase(ref.watch(customerRepositoryProvider)));
-final updateCustomerUseCaseProvider  = Provider<UpdateCustomerUseCase>(
+final updateCustomerUseCaseProvider = Provider<UpdateCustomerUseCase>(
     (ref) => UpdateCustomerUseCase(ref.watch(customerRepositoryProvider)));
-final deleteCustomerUseCaseProvider  = Provider<DeleteCustomerUseCase>(
+final deleteCustomerUseCaseProvider = Provider<DeleteCustomerUseCase>(
     (ref) => DeleteCustomerUseCase(ref.watch(customerRepositoryProvider)));
-final getCustomerUseCaseProvider     = Provider<GetCustomerUseCase>(
+final getCustomerUseCaseProvider = Provider<GetCustomerUseCase>(
     (ref) => GetCustomerUseCase(ref.watch(customerRepositoryProvider)));
 final searchCustomersUseCaseProvider = Provider<SearchCustomersUseCase>(
     (ref) => SearchCustomersUseCase(ref.watch(customerRepositoryProvider)));
@@ -52,6 +52,9 @@ final customersStreamProvider =
     yield [];
     return;
   }
+
+  final remote = ref.watch(customerRemoteDataSourceProvider);
+  await remote.ensurePhoneReservations(user.id);
 
   final useCase = ref.watch(watchCustomersUseCaseProvider);
   await for (final either in useCase(user.id)) {
@@ -76,7 +79,8 @@ final sharedCustomersStreamProvider =
 
 final visibleCustomersProvider = Provider<List<CustomerEntity>>((ref) {
   final owned = ref.watch(customersStreamProvider).valueOrNull ?? const [];
-  final shared = ref.watch(sharedCustomersStreamProvider).valueOrNull ?? const [];
+  final shared =
+      ref.watch(sharedCustomersStreamProvider).valueOrNull ?? const [];
 
   final byId = <String, CustomerEntity>{
     for (final customer in owned) customer.id: customer,

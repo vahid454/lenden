@@ -1,7 +1,7 @@
 name: lenden
 description: LenDen - Personal & Business Credit Tracker for India
 publish_to: 'none'
-version: 1.0.0+4
+version: 1.0.4+8
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -50,7 +50,9 @@ dependencies:
   connectivity_plus: ^6.0.5       # Phase 4: network state
   local_auth: ^2.3.0              # Phase 4: biometric/PIN lock
   package_info_plus: ^8.0.2       # Phase 4: app version info
-  flutter_launcher_icons: ^0.13.1
+  firebase_storage: ^12.4.10
+  image_picker: ^1.2.1
+  image: ^4.5.4
 
 dev_dependencies:
   flutter_test:

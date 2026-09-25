@@ -159,7 +159,8 @@ class CashbookNotifier extends StateNotifier<CashbookState> {
   }) async {
     final uid = _uid;
     if (uid == null || uid.isEmpty) {
-      state = state.copyWith(error: 'User not authenticated. Please log in again.');
+      state =
+          state.copyWith(error: 'User not authenticated. Please log in again.');
       return false;
     }
 
@@ -191,16 +192,18 @@ class CashbookNotifier extends StateNotifier<CashbookState> {
         }
         String errorMsg = 'Failed to save entry. Please try again.';
         if (e.code == 'permission-denied') {
-          errorMsg = 'Permission denied. Check your account settings or Firestore rules.';
+          errorMsg =
+              'Permission denied. Check your account settings or Firestore rules.';
         } else if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
           errorMsg = 'Network error. Check your internet connection.';
         } else if (e.code == 'resource-exhausted') {
-          errorMsg = 'Storage quota exceeded. Please delete old entries.';
+          errorMsg = 'Storage quota exceeded. Please contact support.';
         }
         state = state.copyWith(error: errorMsg);
         return false;
       } catch (e) {
-        state = state.copyWith(error: 'Failed to save entry. Please try again.');
+        state =
+            state.copyWith(error: 'Failed to save entry. Please try again.');
         return false;
       }
     }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_providers.dart';
 import '../../../core/providers/customer_providers.dart';
 import '../../../core/providers/payment_promise_providers.dart';
@@ -14,7 +15,9 @@ import '../../../core/services/connectivity_service.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/payment_promise_entity.dart';
+import '../../../domain/entities/user_entity.dart';
 import '../../common/widgets/common_widgets.dart';
+import '../../auth/widgets/contact_email_dialog.dart';
 import '../../customers/widgets/customer_card.dart';
 import '../../cashbook/pages/cashbook_page.dart';
 import '../../reports/pages/reports_page.dart';
@@ -29,11 +32,13 @@ class DashboardPage extends ConsumerStatefulWidget {
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
   int _navIndex = 0;
+  bool _emailPromptScheduled = false;
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final isOnline = ref.watch(isOnlineProvider);
+    _scheduleMissingEmailPrompt(user);
 
     return Scaffold(
       appBar: _buildAppBar(context, ref, user?.name ?? 'User'),
@@ -60,6 +65,36 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     );
   }
 
+  void _scheduleMissingEmailPrompt(UserEntity? user) {
+    if (_emailPromptScheduled ||
+        user == null ||
+        (user.email?.trim().isNotEmpty ?? false)) {
+      return;
+    }
+    _emailPromptScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final email = await showContactEmailDialog(context);
+      if (email == null || !mounted) return;
+      try {
+        await ref.read(accountRecoveryServiceProvider).saveContactEmail(email);
+        ref.invalidate(authStateProvider);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Email address saved.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+      } catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(error.toString().replaceFirst(RegExp(r'^.*?:\s*'), '')),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.danger,
+        ));
+      }
+    });
+  }
+
   AppBar _buildAppBar(BuildContext context, WidgetRef ref, String name) {
     final titles = ['Home', 'Reports', 'CashBook', 'Profile'];
     return AppBar(
@@ -73,8 +108,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     style: GoogleFonts.poppins(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5)),
-                Text('Track your accounts with confidence',
+                        letterSpacing: 0)),
+                Text(AppConstants.appTagline,
                     style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -86,9 +121,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             )
           : Text(titles[_navIndex],
               style: GoogleFonts.poppins(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5)),
+                  fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: 0)),
       actions: [
         if (_navIndex == 0)
           Tooltip(
@@ -460,9 +493,8 @@ class _NetBalanceHero extends StatelessWidget {
             style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
           ),
           const SizedBox(height: 14),
-          Row(children: [
+          Wrap(spacing: 8, runSpacing: 6, children: [
             _NetChip('↓ ${AppFormatters.rupee(toReceive)} to receive'),
-            const SizedBox(width: 8),
             _NetChip('↑ ${AppFormatters.rupee(toPay)} to pay'),
           ]),
         ],
@@ -522,9 +554,18 @@ class _SummaryChip extends StatelessWidget {
           child: Icon(icon, color: color, size: 16),
         ),
         const SizedBox(height: 8),
-        Text(AppFormatters.rupee(amount),
-            style: GoogleFonts.poppins(
-                fontSize: 18, fontWeight: FontWeight.w700, color: color)),
+        SizedBox(
+          width: double.infinity,
+          height: 27,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(AppFormatters.rupee(amount),
+                maxLines: 1,
+                style: GoogleFonts.poppins(
+                    fontSize: 18, fontWeight: FontWeight.w700, color: color)),
+          ),
+        ),
         Text(label,
             style: GoogleFonts.poppins(
                 fontSize: 11,
@@ -551,15 +592,19 @@ class _FollowUpsHomePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final open = promises.where((promise) => promise.isOpen).toList();
+    final customerById = {
+      for (final customer in customers) customer.id: customer
+    };
+    final open = promises
+        .where((promise) =>
+            promise.isOpen &&
+            (customerById[promise.customerId]?.balance ?? 0) > 0)
+        .toList();
     final overdue = open.where((promise) => promise.isOverdue(now)).toList();
     final today = open.where((promise) => promise.isDueOn(now)).toList();
     final week = open
         .where((promise) => promise.isDueThisWeek(now) && !promise.isDueOn(now))
         .toList();
-    final customerById = {
-      for (final customer in customers) customer.id: customer
-    };
     final preview = [...overdue, ...today, ...week].take(3).toList();
     final cs = Theme.of(context).colorScheme;
 

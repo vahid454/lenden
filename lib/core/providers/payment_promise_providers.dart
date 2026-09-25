@@ -106,8 +106,13 @@ final nextOpenPromiseByCustomerProvider =
     Provider<Map<String, PaymentPromiseEntity>>((ref) {
   final promises =
       ref.watch(paymentPromisesStreamProvider).valueOrNull ?? const [];
+  final customers = {
+    for (final customer in ref.watch(visibleCustomersProvider))
+      customer.id: customer,
+  };
   final result = <String, PaymentPromiseEntity>{};
   for (final promise in promises.where((item) => item.isOpen)) {
+    if ((customers[promise.customerId]?.balance ?? 0) <= 0) continue;
     final current = result[promise.customerId];
     if (current == null ||
         promise.promisedDate.isBefore(current.promisedDate)) {
@@ -147,8 +152,14 @@ final followUpPromisesProvider = Provider<List<PaymentPromiseEntity>>((ref) {
   final now = DateTime.now();
   final promises =
       ref.watch(paymentPromisesStreamProvider).valueOrNull ?? const [];
+  final customers = {
+    for (final customer in ref.watch(visibleCustomersProvider))
+      customer.id: customer,
+  };
   return promises
-      .where((promise) => promise.isOverdue(now) || promise.isDueThisWeek(now))
+      .where((promise) =>
+          (customers[promise.customerId]?.balance ?? 0) > 0 &&
+          (promise.isOverdue(now) || promise.isDueThisWeek(now)))
       .toList()
     ..sort((a, b) {
       final aPriority = a.isOverdue(now) ? 0 : 1;

@@ -8,6 +8,7 @@ import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/usecases/auth_usecases.dart';
+import '../services/account_recovery_service.dart';
 
 // ── Infrastructure Providers ──────────────────────────────────────────────────
 
@@ -20,6 +21,13 @@ final firebaseAuthProvider = Provider<FirebaseAuth>(
 final firestoreProvider = Provider<FirebaseFirestore>(
   (ref) => FirebaseFirestore.instance,
 );
+
+final accountRecoveryServiceProvider = Provider<AccountRecoveryService>((ref) {
+  return AccountRecoveryService(
+    auth: ref.watch(firebaseAuthProvider),
+    firestore: ref.watch(firestoreProvider),
+  );
+});
 
 // ── Data Source Providers ─────────────────────────────────────────────────────
 

@@ -11,6 +11,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/utils/validators.dart';
 import '../../common/widgets/common_widgets.dart';
 import '../providers/phone_input_provider.dart';
+import '../widgets/recovery_access_sheet.dart';
 
 /// Step 1 of auth flow: user enters their 10-digit Indian mobile number.
 class PhoneInputPage extends ConsumerStatefulWidget {
@@ -21,9 +22,10 @@ class PhoneInputPage extends ConsumerStatefulWidget {
 }
 
 class _PhoneInputPageState extends ConsumerState<PhoneInputPage> {
-  final _formKey    = GlobalKey<FormState>();
-  final _phoneCtrl  = TextEditingController();
-  final _focusNode  = FocusNode();
+  final _formKey = GlobalKey<FormState>();
+  final _phoneCtrl = TextEditingController();
+  final _focusNode = FocusNode();
+  bool _sendInFlight = false;
 
   @override
   void initState() {
@@ -42,8 +44,11 @@ class _PhoneInputPageState extends ConsumerState<PhoneInputPage> {
   }
 
   Future<void> _onSendOtp() async {
+    if (_sendInFlight) return;
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
+
+    setState(() => _sendInFlight = true);
 
     final phone = '${AppConstants.defaultCountryCode}${_phoneCtrl.text.trim()}';
     final notifier = ref.read(phoneInputProvider.notifier);
@@ -51,6 +56,7 @@ class _PhoneInputPageState extends ConsumerState<PhoneInputPage> {
     final verificationId = await notifier.sendOtp(phone);
 
     if (!mounted) return;
+    setState(() => _sendInFlight = false);
 
     if (verificationId != null) {
       context.push(AppRoutes.otpVerify, extra: {
@@ -94,7 +100,10 @@ class _PhoneInputPageState extends ConsumerState<PhoneInputPage> {
                       // ── Heading ────────────────────────────────────────────
                       Text(
                         'Enter your\nmobile number',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
                               fontWeight: FontWeight.w700,
                               height: 1.2,
                             ),
@@ -135,12 +144,35 @@ class _PhoneInputPageState extends ConsumerState<PhoneInputPage> {
                       // ── CTA Button ─────────────────────────────────────────
                       AppButton(
                         label: 'Send OTP',
-                        onPressed: state.isLoading ? null : _onSendOtp,
-                        isLoading: state.isLoading,
+                        onPressed: state.isLoading || _sendInFlight
+                            ? null
+                            : _onSendOtp,
+                        isLoading: state.isLoading || _sendInFlight,
                         leadingIcon: Icons.send_rounded,
                       ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.2),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
+
+                      Center(
+                        child: TextButton.icon(
+                          onPressed: state.isLoading
+                              ? null
+                              : () async {
+                                  final signedIn =
+                                      await showRecoveryAccessSheet(
+                                    context,
+                                    configure: false,
+                                  );
+                                  if (signedIn == true && context.mounted) {
+                                    context.go(AppRoutes.dashboard);
+                                  }
+                                },
+                          icon: const Icon(Icons.shield_outlined, size: 18),
+                          label: const Text('Use recovery email'),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
 
                       // ── Terms ──────────────────────────────────────────────
                       Center(

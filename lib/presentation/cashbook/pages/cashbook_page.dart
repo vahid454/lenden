@@ -31,7 +31,7 @@ class _CashbookPageState extends ConsumerState<CashbookPage> {
           isDark ? AppColors.darkBackground : const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('CashBook',
+          Text('Cashbook',
               style: GoogleFonts.poppins(
                   fontSize: 20, fontWeight: FontWeight.w700)),
           Text(
@@ -44,11 +44,8 @@ class _CashbookPageState extends ConsumerState<CashbookPage> {
         ]),
         actions: [
           IconButton(
-            icon: const Icon(Icons.calendar_today_outlined, size: 20),
-            onPressed: () => _pickDate(context),
-          ),
-          IconButton(
             icon: const Icon(Icons.refresh_rounded, size: 20),
+            tooltip: 'Refresh',
             onPressed: () => ref.read(cashbookProvider.notifier).refresh(),
           ),
           IconButton(
@@ -60,22 +57,40 @@ class _CashbookPageState extends ConsumerState<CashbookPage> {
         ],
       ),
       body: Column(children: [
-        // ── Daily summary ───────────────────────────────────────────────
+        _DateNavigator(
+          date: state.selectedDate,
+          isToday: state.isToday,
+          onPrevious: () => _shiftDate(-1),
+          onNext: state.isToday ? null : () => _shiftDate(1),
+          onPick: () => _pickDate(context),
+        ),
         _DailySummary(state: state),
 
         // ── Entry list ──────────────────────────────────────────────────
         Expanded(
           child: state.isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(
+                  child: SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                )
               : state.entries.isEmpty
                   ? _EmptyState()
                   : _EntryList(state: state),
         ),
       ]),
-
-      // ── Quick entry FABs ─────────────────────────────────────────────
-      floatingActionButton: _QuickEntryFab(
-        onAdd: () => _showAddSheet(context),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: _QuickEntryBar(
+        onReceived: () => _showAddSheet(
+          context,
+          initialType: CashType.cashIn,
+        ),
+        onGave: () => _showAddSheet(
+          context,
+          initialType: CashType.cashOut,
+        ),
       ),
     );
   }
@@ -92,12 +107,22 @@ class _CashbookPageState extends ConsumerState<CashbookPage> {
     }
   }
 
-  Future<void> _showAddSheet(BuildContext context) async {
+  void _shiftDate(int days) {
+    final current = ref.read(cashbookProvider).selectedDate;
+    ref
+        .read(cashbookProvider.notifier)
+        .selectDate(current.add(Duration(days: days)));
+  }
+
+  Future<void> _showAddSheet(
+    BuildContext context, {
+    required CashType initialType,
+  }) async {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _AddEntrySheet(),
+      builder: (_) => _AddEntrySheet(initialType: initialType),
     );
   }
 
@@ -164,6 +189,78 @@ class _CashbookPageState extends ConsumerState<CashbookPage> {
         behavior: SnackBarBehavior.floating,
       ));
     }
+  }
+}
+
+class _DateNavigator extends StatelessWidget {
+  final DateTime date;
+  final bool isToday;
+  final VoidCallback onPrevious;
+  final VoidCallback? onNext;
+  final VoidCallback onPick;
+
+  const _DateNavigator({
+    required this.date,
+    required this.isToday,
+    required this.onPrevious,
+    required this.onNext,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(
+          bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onPrevious,
+            tooltip: 'Previous day',
+            icon: const Icon(Icons.chevron_left_rounded, size: 22),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: onPick,
+              borderRadius: BorderRadius.circular(6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.calendar_today_outlined,
+                      size: 16, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      isToday
+                          ? 'Today, ${DateFormat('d MMM').format(date)}'
+                          : DateFormat('EEE, d MMM yyyy').format(date),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: onNext,
+            tooltip: 'Next day',
+            icon: const Icon(Icons.chevron_right_rounded, size: 22),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -273,7 +370,8 @@ class _ExportOption extends StatelessWidget {
               const SizedBox(height: 2),
               Text(subtitle,
                   style: GoogleFonts.poppins(
-                      fontSize: 11, color: cs.onSurface.withValues(alpha: 0.48))),
+                      fontSize: 11,
+                      color: cs.onSurface.withValues(alpha: 0.48))),
             ]),
           ),
           Icon(Icons.chevron_right_rounded,
@@ -292,129 +390,172 @@ class _DailySummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final bal = state.balance;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final background =
+        isDark ? const Color(0xFF111A17) : const Color(0xFF17231F);
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [cs.primary, cs.primary.withValues(alpha: 0.8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withValues(alpha: 0.3),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          )
-        ],
-      ),
+      width: double.infinity,
+      color: background,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Balance amount - prominent
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text('बाकी रकम',
-                  style: GoogleFonts.poppins(
-                      fontSize: 13, 
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontWeight: FontWeight.w500)),
-              const SizedBox(height: 6),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  AppFormatters.rupee(bal.abs()),
-                  maxLines: 1,
-                  style: GoogleFonts.poppins(
-                      fontSize: 36,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      height: 1),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'CLOSING BALANCE',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white.withValues(alpha: 0.58),
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    SizedBox(
+                      height: 39,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          AppFormatters.rupee(bal.abs()),
+                          maxLines: 1,
+                          style: GoogleFonts.poppins(
+                            fontSize: 34,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            height: 1,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      bal >= 0 ? 'Cash in hand' : 'Cash shortage',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: bal >= 0
+                            ? const Color(0xFF7EE2A8)
+                            : const Color(0xFFFF9A91),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: bal >= 0 ? AppColors.success : AppColors.danger,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.12),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    bal >= 0 ? 'Cash in hand' : 'Cash shortage',
-                    style: GoogleFonts.poppins(
-                        fontSize: 12, 
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontWeight: FontWeight.w500),
-                  ),
-                ],
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: Colors.white,
+                  size: 22,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          // Stats row
+          const SizedBox(height: 15),
+          Divider(height: 1, color: Colors.white.withValues(alpha: 0.12)),
+          const SizedBox(height: 13),
           Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Gave ↓',
-                        style: GoogleFonts.poppins(
-                            fontSize: 11, 
-                            color: Colors.white.withValues(alpha: 0.7),
-                            fontWeight: FontWeight.w500)),
-                    const SizedBox(height: 4),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        AppFormatters.rupee(state.totalOut),
-                        style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white),
-                      ),
-                    ),
-                  ],
+                child: _SummaryMetric(
+                  label: 'RECEIVED',
+                  value: AppFormatters.rupee(state.totalIn),
+                  color: const Color(0xFF7EE2A8),
                 ),
               ),
+              Container(
+                width: 1,
+                height: 32,
+                color: Colors.white.withValues(alpha: 0.12),
+              ),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Received ↑',
-                        style: GoogleFonts.poppins(
-                            fontSize: 11, 
-                            color: Colors.white.withValues(alpha: 0.7),
-                            fontWeight: FontWeight.w500)),
-                    const SizedBox(height: 4),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        AppFormatters.rupee(state.totalIn),
-                        style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white),
-                      ),
-                    ),
-                  ],
+                child: _SummaryMetric(
+                  label: 'GAVE',
+                  value: AppFormatters.rupee(state.totalOut),
+                  color: const Color(0xFFFF9A91),
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 32,
+                color: Colors.white.withValues(alpha: 0.12),
+              ),
+              Expanded(
+                child: _SummaryMetric(
+                  label: 'ENTRIES',
+                  value: state.entries.length.toString(),
+                  color: Colors.white,
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _SummaryMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: Colors.white.withValues(alpha: 0.48),
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 20,
+            child: FittedBox(
+              alignment: Alignment.centerLeft,
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -434,15 +575,17 @@ class _EntryList extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(children: [
-      // Column headers with better styling
       Container(
-        margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-              color: isDark ? AppColors.darkBorder : AppColors.border, width: 0.8),
+          color:
+              isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
+          border: Border(
+            bottom: BorderSide(
+              color: isDark ? AppColors.darkBorder : AppColors.border,
+            ),
+          ),
         ),
         child: Row(children: [
           Expanded(
@@ -452,7 +595,7 @@ class _EntryList extends ConsumerWidget {
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: cs.onSurface.withValues(alpha: 0.5),
-                      letterSpacing: 0.5))),
+                      letterSpacing: 0))),
           const SizedBox(width: 1),
           Expanded(
               flex: 3,
@@ -462,7 +605,7 @@ class _EntryList extends ConsumerWidget {
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: AppColors.success.withValues(alpha: 0.75),
-                      letterSpacing: 0.5))),
+                      letterSpacing: 0))),
           const SizedBox(width: 1),
           Expanded(
               flex: 3,
@@ -472,14 +615,12 @@ class _EntryList extends ConsumerWidget {
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: AppColors.danger.withValues(alpha: 0.75),
-                      letterSpacing: 0.5))),
+                      letterSpacing: 0))),
         ]),
       ),
-
-      // Entries with improved design
       Expanded(
         child: ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+          padding: const EdgeInsets.only(bottom: 96),
           itemCount: state.entries.length,
           itemBuilder: (ctx, i) {
             final e = state.entries[i];
@@ -503,114 +644,114 @@ class _EntryRow extends StatelessWidget {
     final fmt = NumberFormat('#,##,###').format(entry.amount.toInt());
     final time = DateFormat('h:mm a').format(entry.createdAt);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 7),
+    return DecoratedBox(
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-            color: isDark ? AppColors.darkBorder : AppColors.border, 
-            width: 0.8),
-        boxShadow: [
-          BoxShadow(
-            color: isDark 
-              ? Colors.black.withValues(alpha: 0.1) 
-              : Colors.grey.withValues(alpha: 0.08),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? AppColors.darkBorder : AppColors.border,
+            width: 0.8,
           ),
-        ],
+        ),
       ),
-      child: IntrinsicHeight(
-        child: Row(children: [
-          // Time + note with better spacing
-          Expanded(
-              flex: 4,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(time,
-                        style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: cs.onSurface.withValues(alpha: 0.7))),
-                    if (entry.note?.isNotEmpty == true) ...[
-                      const SizedBox(height: 3),
-                      Text(entry.note!,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 64),
+        child: IntrinsicHeight(
+          child: Row(children: [
+            Container(
+              width: 3,
+              color: entry.isCashIn ? AppColors.success : AppColors.danger,
+            ),
+            // Time + note with better spacing
+            Expanded(
+                flex: 4,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(time,
                           style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: cs.onSurface.withValues(alpha: 0.5),
-                              fontWeight: FontWeight.w400),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: cs.onSurface.withValues(alpha: 0.7))),
+                      if (entry.note?.isNotEmpty == true) ...[
+                        const SizedBox(height: 3),
+                        Text(entry.note!,
+                            style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: cs.onSurface.withValues(alpha: 0.5),
+                                fontWeight: FontWeight.w400),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                      ],
                     ],
-                  ],
-                ),
-              )),
-          // Divider
-          VerticalDivider(
-              width: 1,
-              thickness: 0.8,
-              color: isDark ? AppColors.darkBorder : AppColors.border),
-          // Cash In
-          Expanded(
-              flex: 3,
-              child: Center(
-                child: entry.isCashIn
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text('₹$fmt',
-                              maxLines: 1,
-                              style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.success),
-                              textAlign: TextAlign.center),
-                        ),
-                      )
-                    : Text('—',
-                        style: GoogleFonts.poppins(
-                            fontSize: 13, 
-                            color: cs.onSurface.withValues(alpha: 0.15),
-                            fontWeight: FontWeight.w400),
-                        textAlign: TextAlign.center),
-              )),
-          // Divider
-          VerticalDivider(
-              width: 1,
-              thickness: 0.8,
-              color: isDark ? AppColors.darkBorder : AppColors.border),
-          // Cash Out
-          Expanded(
-              flex: 3,
-              child: Center(
-                child: !entry.isCashIn
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text('₹$fmt',
-                              maxLines: 1,
-                              style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.danger),
-                              textAlign: TextAlign.center),
-                        ),
-                      )
-                    : Text('—',
-                        style: GoogleFonts.poppins(
-                            fontSize: 13, 
-                            color: cs.onSurface.withValues(alpha: 0.15),
-                            fontWeight: FontWeight.w400),
-                        textAlign: TextAlign.center),
-              )),
-        ]),
+                  ),
+                )),
+            // Divider
+            VerticalDivider(
+                width: 1,
+                thickness: 0.8,
+                color: isDark ? AppColors.darkBorder : AppColors.border),
+            // Cash In
+            Expanded(
+                flex: 3,
+                child: Center(
+                  child: entry.isCashIn
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('₹$fmt',
+                                maxLines: 1,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.success),
+                                textAlign: TextAlign.center),
+                          ),
+                        )
+                      : Text('—',
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: cs.onSurface.withValues(alpha: 0.15),
+                              fontWeight: FontWeight.w400),
+                          textAlign: TextAlign.center),
+                )),
+            // Divider
+            VerticalDivider(
+                width: 1,
+                thickness: 0.8,
+                color: isDark ? AppColors.darkBorder : AppColors.border),
+            // Cash Out
+            Expanded(
+                flex: 3,
+                child: Center(
+                  child: !entry.isCashIn
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('₹$fmt',
+                                maxLines: 1,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.danger),
+                                textAlign: TextAlign.center),
+                          ),
+                        )
+                      : Text('—',
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: cs.onSurface.withValues(alpha: 0.15),
+                              fontWeight: FontWeight.w400),
+                          textAlign: TextAlign.center),
+                )),
+          ]),
+        ),
       ),
     )
         .animate(delay: Duration(milliseconds: index * 25))
@@ -618,30 +759,82 @@ class _EntryRow extends StatelessWidget {
   }
 }
 
-// ── Quick Entry FAB ───────────────────────────────────────────────────────────
+// ── Quick Entry Bar ───────────────────────────────────────────────────────────
 
-class _QuickEntryFab extends StatefulWidget {
-  final VoidCallback onAdd;
-  const _QuickEntryFab({required this.onAdd});
+class _QuickEntryBar extends StatelessWidget {
+  final VoidCallback onReceived;
+  final VoidCallback onGave;
 
-  @override
-  State<_QuickEntryFab> createState() => _QuickEntryFabState();
-}
+  const _QuickEntryBar({
+    required this.onReceived,
+    required this.onGave,
+  });
 
-class _QuickEntryFabState extends State<_QuickEntryFab> {
   @override
   Widget build(BuildContext context) {
-    return FloatingActionButton.extended(
-      heroTag: 'cashbook_fab',
-      onPressed: widget.onAdd,
-      icon: const Icon(Icons.add_rounded, size: 20),
-      label: Text('Add Entry',
-          style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600, 
-              fontSize: 14)),
-      backgroundColor: Theme.of(context).colorScheme.primary,
-      foregroundColor: Colors.white,
-      elevation: 6,
+    final width = MediaQuery.sizeOf(context).width - 32;
+    return SizedBox(
+      width: width.clamp(0, 420).toDouble(),
+      height: 54,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: onReceived,
+                child: Container(
+                  color: AppColors.success,
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.south_west_rounded,
+                          size: 18, color: Colors.white),
+                      const SizedBox(width: 7),
+                      Text(
+                        'Received',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: InkWell(
+                onTap: onGave,
+                child: Container(
+                  color: AppColors.danger,
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.north_east_rounded,
+                          size: 18, color: Colors.white),
+                      const SizedBox(width: 7),
+                      Text(
+                        'Gave',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -649,7 +842,9 @@ class _QuickEntryFabState extends State<_QuickEntryFab> {
 // ── Add Entry Bottom Sheet ────────────────────────────────────────────────────
 
 class _AddEntrySheet extends ConsumerStatefulWidget {
-  const _AddEntrySheet();
+  final CashType initialType;
+
+  const _AddEntrySheet({required this.initialType});
 
   @override
   ConsumerState<_AddEntrySheet> createState() => _AddEntrySheetState();
@@ -664,7 +859,7 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
   @override
   void initState() {
     super.initState();
-    _type = CashType.cashIn;
+    _type = widget.initialType;
   }
 
   @override
@@ -696,20 +891,23 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
           amount: amount,
           note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
         );
+    if (!mounted) return;
     setState(() => _loading = false);
-    if (ok && mounted) {
+    if (ok) {
       HapticFeedback.mediumImpact();
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop();
-      // Show success feedback
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
-          content: Text('${_type == CashType.cashIn ? "Cash In" : "Cash Out"} recorded successfully'),
+          content: Text(
+              '${_type == CashType.cashIn ? "Cash In" : "Cash Out"} recorded successfully'),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
       );
-    } else if (mounted) {
-      final error = ref.read(cashbookProvider).error ?? 'Could not save entry. Please try again.';
+    } else {
+      final error = ref.read(cashbookProvider).error ??
+          'Could not save entry. Please try again.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(error),
@@ -752,7 +950,7 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
                         color: isDark ? AppColors.darkBorder : AppColors.border,
                         borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 18),
-            
+
             // Title
             Text('Add Entry',
                 style: GoogleFonts.poppins(
@@ -761,9 +959,12 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
 
             // Type toggle with better design
             Container(
+              clipBehavior: Clip.antiAlias,
               height: 70,
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
+                color: isDark
+                    ? AppColors.darkSurfaceVariant
+                    : AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: isDark ? AppColors.darkBorder : AppColors.border,
@@ -798,7 +999,8 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
                                   fontWeight: FontWeight.w700,
                                   color: _type == CashType.cashIn
                                       ? Colors.white
-                                      : AppColors.success.withValues(alpha: 0.6))),
+                                      : AppColors.success
+                                          .withValues(alpha: 0.6))),
                         ]),
                   ),
                 )),
@@ -829,7 +1031,8 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
                                   fontWeight: FontWeight.w700,
                                   color: _type == CashType.cashOut
                                       ? Colors.white
-                                      : AppColors.danger.withValues(alpha: 0.6))),
+                                      : AppColors.danger
+                                          .withValues(alpha: 0.6))),
                         ]),
                   ),
                 )),
@@ -839,45 +1042,61 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
             const SizedBox(height: 20),
 
             // Amount with better styling
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: accent.withValues(alpha: 0.3), width: 1.5),
-              ),
-              child: Row(children: [
-                Text('₹',
-                    style: GoogleFonts.poppins(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: accent)),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: TextField(
-                  controller: _amountCtrl,
-                  autofocus: true,
-                  maxLines: 1,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  style: GoogleFonts.poppins(
-                      fontSize: 28, fontWeight: FontWeight.w700, color: accent),
-                  inputFormatters: [
-                    _AmountInputFormatter(),
-                  ],
-                  decoration: InputDecoration(
-                    hintText: '0',
-                    hintStyle: GoogleFonts.poppins(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: accent.withValues(alpha: 0.15)),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
+            SizedBox(
+              height: 72,
+              child: TextField(
+                controller: _amountCtrl,
+                autofocus: true,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                maxLines: 1,
+                textAlignVertical: TextAlignVertical.center,
+                scrollPadding: const EdgeInsets.only(bottom: 120),
+                style: GoogleFonts.poppins(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: accent,
+                  height: 1.1,
+                ),
+                inputFormatters: [
+                  _AmountInputFormatter(),
+                ],
+                decoration: InputDecoration(
+                  isDense: true,
+                  filled: true,
+                  fillColor: isDark
+                      ? AppColors.darkSurfaceVariant
+                      : AppColors.surfaceVariant,
+                  prefixText: '₹ ',
+                  prefixStyle: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: accent,
+                    height: 1.1,
                   ),
-                  onSubmitted: (_) => _save(),
-                )),
-              ]),
+                  hintText: '0',
+                  hintStyle: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: accent.withValues(alpha: 0.15),
+                    height: 1.1,
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: accent.withValues(alpha: 0.3),
+                      width: 1.5,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: accent, width: 1.8),
+                  ),
+                ),
+                onSubmitted: (_) => _save(),
+              ),
             ),
 
             const SizedBox(height: 14),
@@ -891,7 +1110,7 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
                 counterText: '',
                 hintText: 'Note (optional)',
                 hintStyle: GoogleFonts.poppins(
-                    fontSize: 14, 
+                    fontSize: 14,
                     color: cs.onSurface.withValues(alpha: 0.4),
                     fontWeight: FontWeight.w400),
                 filled: true,
@@ -940,14 +1159,14 @@ class _AddEntrySheetState extends ConsumerState<_AddEntrySheet> {
                     style: GoogleFonts.poppins(
                         fontSize: 16, fontWeight: FontWeight.w700)),
                 style: ElevatedButton.styleFrom(
-                backgroundColor: accent,
-                foregroundColor: Colors.white,
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
-                disabledBackgroundColor: accent.withValues(alpha: 0.4),
+                  backgroundColor: accent,
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  disabledBackgroundColor: accent.withValues(alpha: 0.4),
+                ),
               ),
-            ),
             ),
             const SizedBox(height: 8),
           ]),
@@ -984,14 +1203,14 @@ class _EmptyState extends StatelessWidget {
         const SizedBox(height: 20),
         Text('No entries today',
             style: GoogleFonts.poppins(
-                fontSize: 18, 
+                fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: cs.onSurface.withValues(alpha: 0.8))),
         const SizedBox(height: 10),
         Text('Tap the Add Entry button to get started',
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
-                fontSize: 14, 
+                fontSize: 14,
                 color: cs.onSurface.withValues(alpha: 0.5),
                 fontWeight: FontWeight.w400)),
       ]),

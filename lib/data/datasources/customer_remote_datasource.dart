@@ -17,6 +17,8 @@ class CustomerRemoteDataSource {
 
   CollectionReference<Map<String, dynamic>> get _col =>
       _firestore.collection(AppConstants.colCustomers);
+  CollectionReference<Map<String, dynamic>> get _phoneKeys =>
+      _firestore.collection(AppConstants.colCustomerPhoneKeys);
 
   // ── Watch customers (real-time) ───────────────────────────────────────────
   // NOTE: orderBy('nameLower') requires a composite Firestore index.
@@ -51,23 +53,111 @@ class CustomerRemoteDataSource {
     });
   }
 
+  /// Creates missing uniqueness records for customers saved before phone keys
+  /// were introduced. Existing reservations are never overwritten.
+  Future<void> ensurePhoneReservations(String userId) async {
+    try {
+      final results = await Future.wait([
+        _col.where('userId', isEqualTo: userId).get(),
+        _phoneKeys.where('userId', isEqualTo: userId).get(),
+      ]);
+      final customers = results[0];
+      final reservedKeys = results[1].docs.map((doc) => doc.id).toSet();
+
+      WriteBatch batch = _firestore.batch();
+      var pendingWrites = 0;
+      for (final customer in customers.docs) {
+        final phone =
+            _normalizePhone(customer.data()['phone'] as String? ?? '');
+        if (phone.length != 10) continue;
+
+        final key = _phoneKey(userId, phone);
+        if (!reservedKeys.add(key)) continue;
+
+        batch.set(_phoneKeys.doc(key), {
+          'userId': userId,
+          'phone': phone,
+          'customerId': customer.id,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        pendingWrites++;
+
+        if (pendingWrites == 400) {
+          await batch.commit();
+          batch = _firestore.batch();
+          pendingWrites = 0;
+        }
+      }
+
+      if (pendingWrites > 0) await batch.commit();
+    } on FirebaseException catch (e) {
+      // Migration failure must not prevent access to the customer's ledger.
+      _logger.w('ensurePhoneReservations: ${e.code}');
+    }
+  }
+
   // ── Add ───────────────────────────────────────────────────────────────────
   Future<CustomerModel> addCustomer(CustomerModel customer) async {
     try {
-      final docRef = await _col.add(customer.toFirestore());
+      final normalizedPhone = _normalizePhone(customer.phone);
+      final duplicate = await _col
+          .where('userId', isEqualTo: customer.userId)
+          .where('phone', isEqualTo: normalizedPhone)
+          .limit(1)
+          .get();
+      if (duplicate.docs.isNotEmpty) {
+        throw const AppException(
+          'A customer with this mobile number already exists.',
+          code: 'customer-already-exists',
+        );
+      }
+
+      // The ID is the server-enforced uniqueness key for this owner and phone.
+      final docRef = _col.doc(_phoneKey(customer.userId, normalizedPhone));
+      final customerData =
+          customer.copyWith(phone: normalizedPhone).toFirestore();
+      try {
+        await docRef.set(customerData);
+      } on FirebaseException catch (e) {
+        if (e.code == 'permission-denied' && (await docRef.get()).exists) {
+          throw const AppException(
+            'A customer with this mobile number already exists.',
+            code: 'customer-already-exists',
+          );
+        }
+        rethrow;
+      }
       final doc = await docRef.get();
       _logger.i('Customer added: ${docRef.id}');
       return CustomerModel.fromFirestore(doc);
+    } on AppException {
+      rethrow;
     } on FirebaseException catch (e) {
       _logger.e('addCustomer: ${e.code}');
-      throw AppException('Failed to add customer: ${e.message}', code: e.code);
+      final message = e.code == 'permission-denied'
+          ? 'Customer could not be saved. Please sign out, sign in again, and retry.'
+          : 'Failed to add customer: ${e.message}';
+      throw AppException(message, code: e.code);
     }
   }
 
   // ── Update ────────────────────────────────────────────────────────────────
   Future<CustomerModel> updateCustomer(CustomerModel customer) async {
     try {
-      final data = customer.toFirestore();
+      final normalizedPhone = _normalizePhone(customer.phone);
+      final duplicates = await _col
+          .where('userId', isEqualTo: customer.userId)
+          .where('phone', isEqualTo: normalizedPhone)
+          .limit(2)
+          .get();
+      if (duplicates.docs.any((doc) => doc.id != customer.id)) {
+        throw const AppException(
+          'A customer with this mobile number already exists.',
+          code: 'customer-already-exists',
+        );
+      }
+
+      final data = customer.copyWith(phone: normalizedPhone).toFirestore();
       if (customer.secondaryPhone == null || customer.secondaryPhone!.isEmpty) {
         data['secondaryPhone'] = FieldValue.delete();
       }
@@ -77,16 +167,61 @@ class CustomerRemoteDataSource {
       if (customer.notes == null || customer.notes!.isEmpty) {
         data['notes'] = FieldValue.delete();
       }
-      await _col.doc(customer.id).update(data);
+      if (customer.photoPath == null || customer.photoPath!.isEmpty) {
+        data['photoPath'] = FieldValue.delete();
+      }
+      final customerRef = _col.doc(customer.id);
+      final phoneKeyRef = _phoneKeys.doc(
+        _phoneKey(customer.userId, normalizedPhone),
+      );
+      final currentCustomer = await customerRef.get();
+      if (!currentCustomer.exists) {
+        throw const AppException('Customer not found.', code: 'not-found');
+      }
+      final currentPhone =
+          _normalizePhone(currentCustomer.data()?['phone'] as String? ?? '');
+      if (currentPhone == normalizedPhone) {
+        await customerRef.update(data);
+      } else {
+        final batch = _firestore.batch();
+        batch.set(phoneKeyRef, {
+          'userId': customer.userId,
+          'phone': normalizedPhone,
+          'customerId': customer.id,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        batch.update(customerRef, data);
+        try {
+          await batch.commit();
+        } on FirebaseException catch (e) {
+          if (e.code == 'permission-denied' &&
+              (await phoneKeyRef.get()).exists) {
+            throw const AppException(
+              'A customer with this mobile number already exists.',
+              code: 'customer-already-exists',
+            );
+          }
+          rethrow;
+        }
+      }
       final doc = await _col.doc(customer.id).get();
       _logger.i('Customer updated: ${customer.id}');
       return CustomerModel.fromFirestore(doc);
+    } on AppException {
+      rethrow;
     } on FirebaseException catch (e) {
       _logger.e('updateCustomer: ${e.code}');
       throw AppException('Failed to update customer: ${e.message}',
           code: e.code);
     }
   }
+
+  String _normalizePhone(String value) {
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    return digits.length <= 10 ? digits : digits.substring(digits.length - 10);
+  }
+
+  String _phoneKey(String userId, String phone) => '${userId}_$phone';
 
   // ── Delete (with cascade) ─────────────────────────────────────────────────
   Future<void> deleteCustomer(String customerId) async {

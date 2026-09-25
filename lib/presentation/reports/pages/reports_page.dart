@@ -15,24 +15,34 @@ import '../../../core/services/share_service.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../domain/entities/transaction_entity.dart';
 import '../providers/reports_provider.dart';
+import 'collection_report_page.dart';
 
 class ReportsPage extends ConsumerWidget {
   const ReportsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state  = ref.watch(reportsProvider);
+    final state = ref.watch(reportsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBackground : const Color(0xFFF4F7FC),
+      backgroundColor:
+          isDark ? AppColors.darkBackground : const Color(0xFFF4F7FC),
       appBar: AppBar(
         backgroundColor: isDark ? AppColors.darkSurface : AppColors.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         title: Text('Reports',
-            style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w800)),
-        actions: [ 
+            style:
+                GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w800)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.assignment_turned_in_outlined, size: 22),
+            tooltip: 'Collection report',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CollectionReportPage()),
+            ),
+          ),
           if (!state.isLoading)
             IconButton(
               icon: const Icon(Icons.refresh_rounded, size: 22),
@@ -41,7 +51,8 @@ class ReportsPage extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 22),
             tooltip: 'Export PDF',
-            onPressed: state.isLoading ? null : () => _exportPdf(context, ref, state),
+            onPressed:
+                state.isLoading ? null : () => _exportPdf(context, ref, state),
           ),
           const SizedBox(width: 4),
         ],
@@ -58,10 +69,11 @@ class ReportsPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _exportPdf(BuildContext ctx, WidgetRef ref, ReportsState state) async {
-    final user      = ref.read(currentUserProvider);
+  Future<void> _exportPdf(
+      BuildContext ctx, WidgetRef ref, ReportsState state) async {
+    final user = ref.read(currentUserProvider);
     final customers = ref.read(customersStreamProvider).valueOrNull ?? [];
-    final service   = ref.read(pdfExportServiceProvider);
+    final service = ref.read(pdfExportServiceProvider);
     if (user == null) return;
 
     final snack = ScaffoldMessenger.of(ctx);
@@ -69,21 +81,21 @@ class ReportsPage extends ConsumerWidget {
         content: Text('Generating PDF…'), behavior: SnackBarBehavior.floating));
     try {
       final file = await service.generateFullReport(
-        customers:    customers,
+        customers: customers,
         transactions: state.transactions,
-        userName:     user.name,
+        userName: user.name,
         businessName: user.businessName ?? '',
-        from:         state.dateRange.from,
-        to:           state.dateRange.to,
+        from: state.dateRange.from,
+        to: state.dateRange.to,
       );
       snack.hideCurrentSnackBar();
       if (ctx.mounted) await ShareService.sharePdf(file, 'Report');
     } catch (e) {
       snack.hideCurrentSnackBar();
       snack.showSnackBar(SnackBar(
-        content:         Text('Export failed: $e'),
+        content: Text('Export failed: $e'),
         backgroundColor: AppColors.danger,
-        behavior:        SnackBarBehavior.floating,
+        behavior: SnackBarBehavior.floating,
       ));
     }
   }
@@ -96,7 +108,7 @@ class _PeriodChips extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selected = ref.watch(reportsProvider).period;
     final notifier = ref.read(reportsProvider.notifier);
-    final cs       = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
 
     return SizedBox(
       height: 44,
@@ -113,17 +125,20 @@ class _PeriodChips extends ConsumerWidget {
                   : notifier.setPeriod(p),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                 decoration: BoxDecoration(
-                  color:        active ? cs.primary : cs.surface,
+                  color: active ? cs.primary : cs.surface,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: active ? cs.primary : AppColors.border),
+                  border:
+                      Border.all(color: active ? cs.primary : AppColors.border),
                 ),
                 child: Text(p.label,
                     style: GoogleFonts.poppins(
-                        fontSize: 12, fontWeight: FontWeight.w600,
-                        color: active ? Colors.white
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: active
+                            ? Colors.white
                             : cs.onSurface.withValues(alpha: 0.6))),
               ),
             ),
@@ -137,7 +152,8 @@ class _PeriodChips extends ConsumerWidget {
     final range = await showDateRangePicker(
         context: ctx, firstDate: DateTime(2020), lastDate: DateTime.now());
     if (range != null) {
-      ref.read(reportsProvider.notifier)
+      ref
+          .read(reportsProvider.notifier)
           .setCustomRange(DateRange(range.start, range.end));
     }
   }
@@ -189,7 +205,7 @@ class _SummaryHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs  = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
     final net = state.netBalance;
 
     return Container(
@@ -225,20 +241,31 @@ class _SummaryHero extends StatelessWidget {
                     color: Colors.white)),
           ),
           const Spacer(),
-          Icon(Icons.insights_rounded, color: Colors.white.withValues(alpha: 0.85)),
+          Icon(Icons.insights_rounded,
+              color: Colors.white.withValues(alpha: 0.85)),
         ]),
         const SizedBox(height: 18),
         Text(AppFormatters.rupee(net.abs()),
             style: GoogleFonts.poppins(
-                fontSize: 36, fontWeight: FontWeight.w800, color: Colors.white)),
+                fontSize: 36,
+                fontWeight: FontWeight.w800,
+                color: Colors.white)),
         const SizedBox(height: 6),
         Text(
-          net == 0 ? 'All settled' : net > 0 ? 'Overall to receive' : 'Overall to pay',
-          style: GoogleFonts.poppins(fontSize: 13, color: Colors.white.withValues(alpha: 0.8)),
+          net == 0
+              ? 'All settled'
+              : net > 0
+                  ? 'Overall to receive'
+                  : 'Overall to pay',
+          style: GoogleFonts.poppins(
+              fontSize: 13, color: Colors.white.withValues(alpha: 0.8)),
         ),
         const SizedBox(height: 18),
         Row(children: [
-          _MiniStat(label: 'Entries', value: '${state.txCount}', color: Colors.white70),
+          _MiniStat(
+              label: 'Entries',
+              value: '${state.txCount}',
+              color: Colors.white70),
           const SizedBox(width: 10),
           _MiniStat(
               label: 'Period',
@@ -257,7 +284,8 @@ class _MiniStat extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  const _MiniStat({required this.label, required this.value, required this.color});
+  const _MiniStat(
+      {required this.label, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -270,9 +298,7 @@ class _MiniStat extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label,
             style: GoogleFonts.poppins(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: color)),
+                fontSize: 11, fontWeight: FontWeight.w600, color: color)),
         const SizedBox(height: 4),
         Text(value,
             style: GoogleFonts.poppins(
@@ -295,32 +321,42 @@ class _GaveGotRow extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Row(children: [
-      Expanded(child: _StatCard(
-        label:   'Total Gave',
-        amount:  state.totalGave,
-        color:   AppColors.success,
-        bg:      AppColors.successLight,
-        icon:    Icons.arrow_upward_rounded,
-        isDark:  isDark,
+      Expanded(
+          child: _StatCard(
+        label: 'Total Gave',
+        amount: state.totalGave,
+        color: AppColors.success,
+        bg: AppColors.successLight,
+        icon: Icons.arrow_upward_rounded,
+        isDark: isDark,
       )),
       const SizedBox(width: 12),
-      Expanded(child: _StatCard(
-        label:   'Total Got',
-        amount:  state.totalGot,
-        color:   AppColors.danger,
-        bg:      AppColors.dangerLight,
-        icon:    Icons.arrow_downward_rounded,
-        isDark:  isDark,
+      Expanded(
+          child: _StatCard(
+        label: 'Total Got',
+        amount: state.totalGot,
+        color: AppColors.danger,
+        bg: AppColors.dangerLight,
+        icon: Icons.arrow_downward_rounded,
+        isDark: isDark,
       )),
     ]);
   }
 }
 
 class _StatCard extends StatelessWidget {
-  final String label; final double amount;
-  final Color color, bg; final IconData icon; final bool isDark;
-  const _StatCard({required this.label, required this.amount,
-    required this.color, required this.bg, required this.icon, required this.isDark});
+  final String label;
+  final double amount;
+  final Color color, bg;
+  final IconData icon;
+  final bool isDark;
+  const _StatCard(
+      {required this.label,
+      required this.amount,
+      required this.color,
+      required this.bg,
+      required this.icon,
+      required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -329,19 +365,20 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg.withValues(alpha: 0.25),
         borderRadius: BorderRadius.circular(22),
-        boxShadow: [BoxShadow(
-          color: bg.withValues(alpha: 0.14),
-          blurRadius: 22,
-          offset: const Offset(0, 10),
-        )],
+        boxShadow: [
+          BoxShadow(
+            color: bg.withValues(alpha: 0.14),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          )
+        ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14)),
+                color: Colors.white, borderRadius: BorderRadius.circular(14)),
             child: Icon(icon, color: color, size: 16),
           ),
           const Spacer(),
@@ -368,10 +405,11 @@ class _BarChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final data   = state.monthlyBreakdown;
+    final data = state.monthlyBreakdown;
     if (data.isEmpty) return const SizedBox.shrink();
-    final cs     = Theme.of(context).colorScheme;
-    final maxY   = data.fold(0.0, (m, d) => math.max(m, math.max(d.gave, d.got))) * 1.3;
+    final cs = Theme.of(context).colorScheme;
+    final maxY =
+        data.fold(0.0, (m, d) => math.max(m, math.max(d.gave, d.got))) * 1.3;
 
     return Container(
       height: 220,
@@ -379,11 +417,13 @@ class _BarChartCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(
-          color: cs.onSurface.withValues(alpha: 0.06),
-          blurRadius: 30,
-          offset: const Offset(0, 12),
-        )],
+        boxShadow: [
+          BoxShadow(
+            color: cs.onSurface.withValues(alpha: 0.06),
+            blurRadius: 30,
+            offset: const Offset(0, 12),
+          )
+        ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -391,11 +431,15 @@ class _BarChartCard extends StatelessWidget {
           const SizedBox(width: 12),
           _Dot(AppColors.danger, 'Got'),
           const Spacer(),
-          Text('Monthly trend', style: GoogleFonts.poppins(
-              fontSize: 12, fontWeight: FontWeight.w600, color: cs.onSurface.withValues(alpha: 0.8))),
+          Text('Monthly trend',
+              style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface.withValues(alpha: 0.8))),
         ]),
         const SizedBox(height: 14),
-        Expanded(child: BarChart(BarChartData(
+        Expanded(
+            child: BarChart(BarChartData(
           alignment: BarChartAlignment.spaceAround,
           maxY: maxY == 0 ? 100 : maxY,
           barTouchData: BarTouchData(
@@ -406,13 +450,17 @@ class _BarChartCard extends StatelessWidget {
                 final value = ri == 0 ? item.gave : item.got;
                 return BarTooltipItem(
                   '${ri == 0 ? 'Gave' : 'Got'}\n${AppFormatters.rupee(value)}',
-                  GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+                  GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white),
                 );
               },
             ),
           ),
           titlesData: FlTitlesData(
-            bottomTitles: AxisTitles(sideTitles: SideTitles(
+            bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 22,
               getTitlesWidget: (value, _) {
@@ -421,19 +469,26 @@ class _BarChartCard extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(label,
-                      style: GoogleFonts.poppins(fontSize: 10, color: cs.onSurface.withValues(alpha: 0.65))),
+                      style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          color: cs.onSurface.withValues(alpha: 0.65))),
                 );
               },
             )),
-            leftTitles: AxisTitles(sideTitles: SideTitles(
+            leftTitles: AxisTitles(
+                sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 40,
               getTitlesWidget: (value, _) => Text(
                   AppFormatters.compactCurrency(value),
-                  style: GoogleFonts.poppins(fontSize: 10, color: cs.onSurface.withValues(alpha: 0.5))),
+                  style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      color: cs.onSurface.withValues(alpha: 0.5))),
             )),
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles:
+                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles:
+                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
           gridData: FlGridData(
             drawVerticalLine: false,
@@ -453,12 +508,14 @@ class _BarChartCard extends StatelessWidget {
                     toY: value.gave,
                     color: AppColors.success,
                     width: 10,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(6))),
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(6))),
                 BarChartRodData(
                     toY: value.got,
                     color: AppColors.danger,
                     width: 10,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(6))),
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(6))),
               ],
             );
           }).toList(),
@@ -469,18 +526,27 @@ class _BarChartCard extends StatelessWidget {
 }
 
 class _Dot extends StatelessWidget {
-  final Color color; final String label;
+  final Color color;
+  final String label;
   const _Dot(this.color, this.label);
   @override
-  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
-    Container(width: 10, height: 10,
-        decoration: BoxDecoration(color: color,
-            borderRadius: BorderRadius.circular(3))),
-    const SizedBox(width: 5),
-    Text(label, style: GoogleFonts.poppins(fontSize: 11,
-        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-        fontWeight: FontWeight.w500)),
-  ]);
+  Widget build(BuildContext context) =>
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+                color: color, borderRadius: BorderRadius.circular(3))),
+        const SizedBox(width: 5),
+        Text(label,
+            style: GoogleFonts.poppins(
+                fontSize: 11,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.6),
+                fontWeight: FontWeight.w500)),
+      ]);
 }
 
 // ── Grouped Transaction List ──────────────────────────────────────────────────
@@ -491,7 +557,7 @@ class _GroupedTxList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs     = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Group by date
@@ -506,28 +572,38 @@ class _GroupedTxList extends StatelessWidget {
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurfaceVariant.withValues(alpha: 0.6)
-            : AppColors.surfaceVariant.withValues(alpha: 0.8),
+          color: isDark
+              ? AppColors.darkSurfaceVariant.withValues(alpha: 0.6)
+              : AppColors.surfaceVariant.withValues(alpha: 0.8),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: Row(children: [
-          Expanded(flex: 4, child: Text('DATE / NOTE',
-              style: GoogleFonts.poppins(fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: cs.onSurface.withValues(alpha: 0.5),
-                  letterSpacing: 0.8))),
-          Expanded(flex: 3, child: Text('GAVE',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.success.withValues(alpha: 0.85),
-                  letterSpacing: 0.8))),
-          Expanded(flex: 3, child: Text('GOT',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.danger.withValues(alpha: 0.85),
-                  letterSpacing: 0.8))),
+          Expanded(
+              flex: 4,
+              child: Text('DATE / NOTE',
+                  style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface.withValues(alpha: 0.5),
+                      letterSpacing: 0.8))),
+          Expanded(
+              flex: 3,
+              child: Text('GAVE',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.success.withValues(alpha: 0.85),
+                      letterSpacing: 0.8))),
+          Expanded(
+              flex: 3,
+              child: Text('GOT',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.danger.withValues(alpha: 0.85),
+                      letterSpacing: 0.8))),
         ]),
       ),
 
@@ -536,7 +612,8 @@ class _GroupedTxList extends StatelessWidget {
         margin: const EdgeInsets.only(top: 0),
         decoration: BoxDecoration(
           color: cs.surface,
-          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+          borderRadius:
+              const BorderRadius.vertical(bottom: Radius.circular(20)),
           boxShadow: [
             BoxShadow(
               color: cs.onSurface.withValues(alpha: 0.06),
@@ -548,15 +625,18 @@ class _GroupedTxList extends StatelessWidget {
         child: Column(children: [
           // Rows grouped by date
           ...grouped.entries.expand((entry) {
-            final date  = entry.key;
+            final date = entry.key;
             final items = entry.value;
-            final dayGave = items.where((t) => t.isGave).fold(0.0, (s, t) => s + t.amount);
-            final dayGot  = items.where((t) => t.isGot ).fold(0.0, (s, t) => s + t.amount);
+            final dayGave =
+                items.where((t) => t.isGave).fold(0.0, (s, t) => s + t.amount);
+            final dayGot =
+                items.where((t) => t.isGot).fold(0.0, (s, t) => s + t.amount);
 
             return [
               // Date subheader with improved visual hierarchy
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
                   color: isDark
                       ? AppColors.darkSurface.withValues(alpha: 0.4)
@@ -564,25 +644,30 @@ class _GroupedTxList extends StatelessWidget {
                 ),
                 child: Row(children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
                       color: isDark
                           ? AppColors.darkSurfaceVariant.withValues(alpha: 0.6)
                           : AppColors.surfaceVariant.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(date, style: GoogleFonts.poppins(
-                        fontSize: 12, fontWeight: FontWeight.w700,
-                        color: cs.onSurface.withValues(alpha: 0.7))),
+                    child: Text(date,
+                        style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface.withValues(alpha: 0.7))),
                   ),
                   const Spacer(),
                   if (dayGave > 0)
                     Row(children: [
-                      Icon(Icons.arrow_upward_rounded, size: 12,
+                      Icon(Icons.arrow_upward_rounded,
+                          size: 12,
                           color: AppColors.success.withValues(alpha: 0.8)),
                       const SizedBox(width: 4),
                       Text('+${AppFormatters.rupee(dayGave)}',
-                          style: GoogleFonts.poppins(fontSize: 12,
+                          style: GoogleFonts.poppins(
+                              fontSize: 12,
                               fontWeight: FontWeight.w700,
                               color: AppColors.success)),
                     ]),
@@ -590,16 +675,19 @@ class _GroupedTxList extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Text('·',
-                          style: GoogleFonts.poppins(fontSize: 14,
+                          style: GoogleFonts.poppins(
+                              fontSize: 14,
                               color: cs.onSurface.withValues(alpha: 0.2))),
                     ),
                   if (dayGot > 0)
                     Row(children: [
-                      Icon(Icons.arrow_downward_rounded, size: 12,
+                      Icon(Icons.arrow_downward_rounded,
+                          size: 12,
                           color: AppColors.danger.withValues(alpha: 0.8)),
                       const SizedBox(width: 4),
                       Text('-${AppFormatters.rupee(dayGot)}',
-                          style: GoogleFonts.poppins(fontSize: 12,
+                          style: GoogleFonts.poppins(
+                              fontSize: 12,
                               fontWeight: FontWeight.w700,
                               color: AppColors.danger)),
                     ]),
@@ -629,7 +717,11 @@ class _TxRow extends StatefulWidget {
   final bool isDark;
   final ColorScheme cs;
   final int index;
-  const _TxRow({required this.tx, required this.isDark, required this.cs, required this.index});
+  const _TxRow(
+      {required this.tx,
+      required this.isDark,
+      required this.cs,
+      required this.index});
 
   @override
   State<_TxRow> createState() => _TxRowState();
@@ -641,8 +733,8 @@ class _TxRowState extends State<_TxRow> {
   @override
   Widget build(BuildContext context) {
     final isGave = widget.tx.isGave;
-    final fmt    = AppFormatters.compactCurrency(widget.tx.amount);
-    final color  = isGave ? AppColors.success : AppColors.danger;
+    final fmt = AppFormatters.compactCurrency(widget.tx.amount);
+    final color = isGave ? AppColors.success : AppColors.danger;
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _isHovered = true),
@@ -652,9 +744,8 @@ class _TxRowState extends State<_TxRow> {
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
         decoration: BoxDecoration(
-          color: _isHovered
-              ? color.withValues(alpha: 0.08)
-              : Colors.transparent,
+          color:
+              _isHovered ? color.withValues(alpha: 0.08) : Colors.transparent,
           border: Border(
             bottom: BorderSide(
               color: widget.isDark
@@ -670,7 +761,8 @@ class _TxRowState extends State<_TxRow> {
             Expanded(
               flex: 4,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -692,82 +784,111 @@ class _TxRowState extends State<_TxRow> {
                       ),
                       const SizedBox(width: 8),
                       Text(DateFormat('h:mm a').format(widget.tx.date),
-                          style: GoogleFonts.poppins(fontSize: 11,
+                          style: GoogleFonts.poppins(
+                              fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: widget.cs.onSurface.withValues(alpha: 0.6))),
+                              color:
+                                  widget.cs.onSurface.withValues(alpha: 0.6))),
                     ]),
                     if (widget.tx.note?.isNotEmpty == true) ...[
                       const SizedBox(height: 4),
-                      Text(widget.tx.note!, style: GoogleFonts.poppins(
-                          fontSize: 12, fontWeight: FontWeight.w500),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(widget.tx.note!,
+                          style: GoogleFonts.poppins(
+                              fontSize: 12, fontWeight: FontWeight.w500),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
                     ],
                   ],
                 ),
               ),
             ),
-            VerticalDivider(width: 1,
+            VerticalDivider(
+                width: 1,
                 color: widget.isDark
                     ? AppColors.darkBorder.withValues(alpha: 0.4)
                     : AppColors.border.withValues(alpha: 0.4)),
             // Gave
-            Expanded(flex: 3, child: Center(child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: isGave
-                  ? Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text('₹$fmt', textAlign: TextAlign.center,
-                            style: GoogleFonts.poppins(fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.success)),
-                      ),
-                    ],
-                  )
-                  : Text('—', textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(fontSize: 13,
-                          color: widget.cs.onSurface.withValues(alpha: 0.15))),
-            ))),
-            VerticalDivider(width: 1,
+            Expanded(
+                flex: 3,
+                child: Center(
+                    child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: isGave
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color:
+                                    AppColors.success.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text('₹$fmt',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.success)),
+                            ),
+                          ],
+                        )
+                      : Text('—',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color:
+                                  widget.cs.onSurface.withValues(alpha: 0.15))),
+                ))),
+            VerticalDivider(
+                width: 1,
                 color: widget.isDark
                     ? AppColors.darkBorder.withValues(alpha: 0.4)
                     : AppColors.border.withValues(alpha: 0.4)),
             // Got
-            Expanded(flex: 3, child: Center(child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: !isGave
-                  ? Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.danger.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text('₹$fmt', textAlign: TextAlign.center,
-                            style: GoogleFonts.poppins(fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.danger)),
-                      ),
-                    ],
-                  )
-                  : Text('—', textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(fontSize: 13,
-                          color: widget.cs.onSurface.withValues(alpha: 0.15))),
-            ))),
+            Expanded(
+                flex: 3,
+                child: Center(
+                    child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: !isGave
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.danger.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text('₹$fmt',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.danger)),
+                            ),
+                          ],
+                        )
+                      : Text('—',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color:
+                                  widget.cs.onSurface.withValues(alpha: 0.15))),
+                ))),
           ]),
         ),
       )
-      .animate()
-      .fadeIn(delay: (160 + (widget.index * 30)).ms, duration: 300.ms)
-      .slideX(begin: -0.1, end: 0, delay: (160 + (widget.index * 30)).ms, duration: 300.ms),
+          .animate()
+          .fadeIn(delay: (160 + (widget.index * 30)).ms, duration: 300.ms)
+          .slideX(
+              begin: -0.1,
+              end: 0,
+              delay: (160 + (widget.index * 30)).ms,
+              duration: 300.ms),
     );
   }
 }
@@ -784,19 +905,21 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Center(child: Column(
+    return Center(
+        child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(Icons.bar_chart_outlined, size: 56,
-            color: cs.onSurface.withValues(alpha: 0.18)),
+        Icon(Icons.bar_chart_outlined,
+            size: 56, color: cs.onSurface.withValues(alpha: 0.18)),
         const SizedBox(height: 16),
         Text('No transactions in this period',
-            style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600),
+            style:
+                GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600),
             textAlign: TextAlign.center),
         const SizedBox(height: 8),
         Text('Try a different date range.',
-            style: GoogleFonts.poppins(fontSize: 13,
-                color: cs.onSurface.withValues(alpha: 0.45))),
+            style: GoogleFonts.poppins(
+                fontSize: 13, color: cs.onSurface.withValues(alpha: 0.45))),
       ],
     ));
   }

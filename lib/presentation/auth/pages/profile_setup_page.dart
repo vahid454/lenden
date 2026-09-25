@@ -26,13 +26,13 @@ class ProfileSetupPage extends ConsumerStatefulWidget {
 }
 
 class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
-  final _formKey      = GlobalKey<FormState>();
-  final _nameCtrl     = TextEditingController();
-  final _emailCtrl    = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
   final _businessCtrl = TextEditingController();
-  final _nameFocus    = FocusNode();
-  final _emailFocus   = FocusNode();
-  final _bizFocus     = FocusNode();
+  final _nameFocus = FocusNode();
+  final _emailFocus = FocusNode();
+  final _bizFocus = FocusNode();
 
   @override
   void initState() {
@@ -58,14 +58,13 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
     FocusScope.of(context).unfocus();
 
     final notifier = ref.read(profileSetupProvider.notifier);
-    final success  = await notifier.saveProfile(
-      userId:       widget.userId,
-      name:         _nameCtrl.text.trim(),
-      phone:        widget.phone,
-      email:        _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
-      businessName: _businessCtrl.text.trim().isEmpty
-                    ? null
-                    : _businessCtrl.text.trim(),
+    final success = await notifier.saveProfile(
+      userId: widget.userId,
+      name: _nameCtrl.text.trim(),
+      phone: widget.phone,
+      email: _emailCtrl.text.trim().toLowerCase(),
+      businessName:
+          _businessCtrl.text.trim().isEmpty ? null : _businessCtrl.text.trim(),
     );
 
     if (!success || !mounted) return;
@@ -84,7 +83,7 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
 
   @override
   Widget build(BuildContext context) {
-    final state       = ref.watch(profileSetupProvider);
+    final state = ref.watch(profileSetupProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
     return KeyboardDismissWrapper(
@@ -93,7 +92,7 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
           child: SafeArea(
             child: LoadingOverlay(
               isLoading: state.isLoading,
-              message:   'Setting up your profile…',
+              message: 'Setting up your profile…',
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Form(
@@ -102,10 +101,10 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 48),
-
                       Center(
                         child: Container(
-                          width: 96, height: 96,
+                          width: 96,
+                          height: 96,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
@@ -121,9 +120,7 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
                               size: 48, color: Colors.white),
                         ),
                       ).animate().scale(curve: Curves.elasticOut),
-
                       const SizedBox(height: 28),
-
                       Center(
                         child: Text("Let's get you started! 🎉",
                             style: Theme.of(context)
@@ -132,23 +129,34 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
                                 ?.copyWith(fontWeight: FontWeight.w700),
                             textAlign: TextAlign.center),
                       ).animate().fadeIn(delay: 200.ms),
-
                       const SizedBox(height: 8),
-
                       Center(
                         child: Text('Tell us a bit about yourself',
                             style: GoogleFonts.poppins(
                                 fontSize: 14,
-                                color: colorScheme.onSurface.withOpacity(0.55))),
+                                color:
+                                    colorScheme.onSurface.withOpacity(0.55))),
                       ).animate().fadeIn(delay: 300.ms),
-
-                      const SizedBox(height: 40),
-
-                      Text('Your Name *',
+                      const SizedBox(height: 6),
+                      Center(
+                        child: Text(
+                          AppConstants.appTagline,
                           style: GoogleFonts.poppins(
-                              fontSize: 13, fontWeight: FontWeight.w600,
-                              color: colorScheme.onSurface.withOpacity(0.7)))
-                          .animate().fadeIn(delay: 350.ms),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      Text('Your Name *',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color:
+                                      colorScheme.onSurface.withOpacity(0.7)))
+                          .animate()
+                          .fadeIn(delay: 350.ms),
                       const SizedBox(height: 8),
                       AppTextField(
                         controller: _nameCtrl,
@@ -162,14 +170,15 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
                         validator: Validators.name,
                         onChanged: (_) => setState(() {}),
                       ).animate().fadeIn(delay: 400.ms),
-
                       const SizedBox(height: 20),
-
-                      Text('Email (Optional)',
-                          style: GoogleFonts.poppins(
-                              fontSize: 13, fontWeight: FontWeight.w600,
-                              color: colorScheme.onSurface.withOpacity(0.7)))
-                          .animate().fadeIn(delay: 425.ms),
+                      Text('Email Address *',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color:
+                                      colorScheme.onSurface.withOpacity(0.7)))
+                          .animate()
+                          .fadeIn(delay: 425.ms),
                       const SizedBox(height: 8),
                       AppTextField(
                         controller: _emailCtrl,
@@ -179,17 +188,18 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
                         focusNode: _emailFocus,
                         textInputAction: TextInputAction.next,
                         keyboardType: TextInputType.emailAddress,
-                        validator: Validators.optionalEmail,
+                        validator: Validators.email,
                         onEditingComplete: () => _bizFocus.requestFocus(),
                       ).animate().fadeIn(delay: 450.ms),
-
                       const SizedBox(height: 20),
-
                       Text('Business Name (Optional)',
-                          style: GoogleFonts.poppins(
-                              fontSize: 13, fontWeight: FontWeight.w600,
-                              color: colorScheme.onSurface.withOpacity(0.7)))
-                          .animate().fadeIn(delay: 450.ms),
+                              style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color:
+                                      colorScheme.onSurface.withOpacity(0.7)))
+                          .animate()
+                          .fadeIn(delay: 450.ms),
                       const SizedBox(height: 8),
                       AppTextField(
                         controller: _businessCtrl,
@@ -201,31 +211,28 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
                         textInputAction: TextInputAction.done,
                         onEditingComplete: _onSave,
                       ).animate().fadeIn(delay: 525.ms),
-
                       const SizedBox(height: 12),
                       Text(
-                        'You can update this anytime from your profile.',
+                        'We use your email for important account communication. You can update it from Profile.',
                         style: GoogleFonts.poppins(
                             fontSize: 12,
                             color: colorScheme.onSurface.withOpacity(0.45)),
                       ).animate().fadeIn(delay: 550.ms),
-
                       const SizedBox(height: 32),
-
                       if (state.errorMessage != null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 16),
                           child: ErrorDisplay(message: state.errorMessage!)
-                              .animate().fadeIn().shakeX(amount: 4),
+                              .animate()
+                              .fadeIn()
+                              .shakeX(amount: 4),
                         ),
-
                       AppButton(
                         label: 'Start Using LenDen',
                         onPressed: state.isLoading ? null : _onSave,
                         isLoading: state.isLoading,
                         leadingIcon: Icons.rocket_launch_outlined,
                       ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2),
-
                       const SizedBox(height: 32),
                     ],
                   ),

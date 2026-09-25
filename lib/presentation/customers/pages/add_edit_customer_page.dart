@@ -4,12 +4,16 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/providers/customer_photo_providers.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/utils/validators.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../common/widgets/common_widgets.dart';
 import '../providers/customer_form_provider.dart';
+import '../widgets/customer_avatar_image.dart';
 
 /// Add/Edit customer screen — shared for both operations.
 /// Pass [existingCustomer] via GoRouter `extra` to enter edit mode.
@@ -39,6 +43,7 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
   final _secondaryPhoneFocus = FocusNode();
   final _addressFocus = FocusNode();
   final _notesFocus = FocusNode();
+  Uint8List? _photoBytes;
 
   @override
   void initState() {
@@ -51,9 +56,6 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
     _addressCtrl = TextEditingController(text: c?.address ?? '');
     _notesCtrl = TextEditingController(text: c?.notes ?? '');
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _nameFocus.requestFocus();
-    });
   }
 
   @override
@@ -77,6 +79,7 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
 
     final notifier = ref.read(customerFormProvider.notifier);
     bool success;
+    CustomerEntity? createdCustomer;
 
     if (widget.isEditing) {
       success = await notifier.updateCustomer(
@@ -86,32 +89,90 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
         secondaryPhone: _secondaryPhoneCtrl.text,
         address: _addressCtrl.text,
         notes: _notesCtrl.text,
+        photoBytes: _photoBytes,
       );
     } else {
-      success = await notifier.addCustomer(
+      createdCustomer = await notifier.addCustomer(
         name: _nameCtrl.text,
         phone: _phoneCtrl.text,
         secondaryPhone: _secondaryPhoneCtrl.text,
         address: _addressCtrl.text,
         notes: _notesCtrl.text,
+        photoBytes: _photoBytes,
       );
+      success = createdCustomer != null;
     }
 
     if (success && mounted) {
+      final notice = ref.read(customerFormProvider).noticeMessage;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            widget.isEditing
-                ? '${_nameCtrl.text.trim()} updated!'
-                : '${_nameCtrl.text.trim()} added!',
+            notice ??
+                (widget.isEditing
+                    ? '${_nameCtrl.text.trim()} updated!'
+                    : '${_nameCtrl.text.trim()} added!'),
           ),
-          backgroundColor: const Color(0xFF16A34A),
+          backgroundColor: notice == null
+              ? const Color(0xFF16A34A)
+              : const Color(0xFFD97706),
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
-      context.pop();
+      if (widget.isEditing) {
+        context.pop();
+      } else {
+        context.pushReplacement(
+          AppRoutes.customerDetail(createdCustomer!.id),
+          extra: createdCustomer,
+        );
+      }
+    }
+  }
+
+  Future<void> _pickPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Customer photo',
+                  style: GoogleFonts.poppins(
+                      fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take photo'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Choose from gallery'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+    try {
+      final bytes =
+          await ref.read(customerPhotoServiceProvider).pickAndCompress(source);
+      if (bytes != null && mounted) setState(() => _photoBytes = bytes);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error.toString()),
+        behavior: SnackBarBehavior.floating,
+      ));
     }
   }
 
@@ -145,7 +206,7 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
                   fontWeight: FontWeight.w700,
                   fontSize: 15,
                   color: state.isLoading
-                      ? colorScheme.onSurface.withOpacity(0.3)
+                      ? colorScheme.onSurface.withValues(alpha: 0.3)
                       : colorScheme.primary,
                 ),
               ),
@@ -164,14 +225,17 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ── Avatar preview ───────────────────────────────────────
-                  Center(
-                    child: _AvatarPreview(nameController: _nameCtrl),
-                  ).animate().scale(curve: Curves.elasticOut),
+                  _CustomerPhotoPicker(
+                    nameController: _nameCtrl,
+                    selectedBytes: _photoBytes,
+                    photoPath: widget.existingCustomer?.photoPath,
+                    onTap: _pickPhoto,
+                  ).animate().fadeIn(),
 
                   const SizedBox(height: 28),
 
                   // ── Section: Basic Info ──────────────────────────────────
-                  _SectionLabel(label: 'Basic Information'),
+                  const _SectionLabel(label: 'Basic Information'),
                   const SizedBox(height: 12),
 
                   // Name
@@ -213,7 +277,7 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
                   const SizedBox(height: 24),
 
                   // ── Section: Optional ────────────────────────────────────
-                  _SectionLabel(label: 'Optional Details'),
+                  const _SectionLabel(label: 'Optional Details'),
                   const SizedBox(height: 12),
 
                   // Address
@@ -239,10 +303,10 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
                     textInputAction: TextInputAction.done,
                     onEditingComplete: _onSave,
                     style: GoogleFonts.poppins(fontSize: 14),
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'Notes',
                       hintText: 'e.g. Shop owner, meets every Tuesday…',
-                      prefixIcon: const Padding(
+                      prefixIcon: Padding(
                         padding: EdgeInsets.only(bottom: 40),
                         child: Icon(Icons.note_outlined, size: 20),
                       ),
@@ -285,21 +349,37 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
 // ── Avatar Preview ─────────────────────────────────────────────────────────────
 
 /// Shows initials from the name field in real-time as the user types.
-class _AvatarPreview extends StatefulWidget {
+class _CustomerPhotoPicker extends StatefulWidget {
   final TextEditingController nameController;
+  final Uint8List? selectedBytes;
+  final String? photoPath;
+  final VoidCallback onTap;
 
-  const _AvatarPreview({required this.nameController});
+  const _CustomerPhotoPicker({
+    required this.nameController,
+    required this.selectedBytes,
+    required this.photoPath,
+    required this.onTap,
+  });
 
   @override
-  State<_AvatarPreview> createState() => _AvatarPreviewState();
+  State<_CustomerPhotoPicker> createState() => _CustomerPhotoPickerState();
 }
 
-class _AvatarPreviewState extends State<_AvatarPreview> {
+class _CustomerPhotoPickerState extends State<_CustomerPhotoPicker> {
   @override
   void initState() {
     super.initState();
-    widget.nameController.addListener(() => setState(() {}));
+    widget.nameController.addListener(_refresh);
   }
+
+  @override
+  void dispose() {
+    widget.nameController.removeListener(_refresh);
+    super.dispose();
+  }
+
+  void _refresh() => setState(() {});
 
   String get _initials {
     final text = widget.nameController.text.trim();
@@ -315,27 +395,110 @@ class _AvatarPreviewState extends State<_AvatarPreview> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      width: 80,
-      height: 80,
+    return Container(
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: colorScheme.primary.withOpacity(0.12),
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: colorScheme.primary.withOpacity(0.3),
-          width: 2,
-        ),
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
-      child: Center(
-        child: Text(
-          _initials,
-          style: GoogleFonts.poppins(
-            fontSize: 26,
-            fontWeight: FontWeight.w700,
-            color: colorScheme.primary,
+      child: Row(
+        children: [
+          Semantics(
+            button: true,
+            label: 'Add customer photo',
+            child: InkWell(
+              onTap: widget.onTap,
+              customBorder: const CircleBorder(),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  if (widget.selectedBytes != null)
+                    Container(
+                      width: 80,
+                      height: 80,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: colorScheme.primary.withValues(alpha: 0.35),
+                          width: 2,
+                        ),
+                      ),
+                      child: Image.memory(
+                        widget.selectedBytes!,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                      ),
+                    )
+                  else
+                    CustomerAvatarImage(
+                      initials: _initials,
+                      photoPath: widget.photoPath,
+                      color: colorScheme.primary,
+                      size: 80,
+                      fontSize: 26,
+                      borderWidth: 2,
+                    ),
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: colorScheme.surface, width: 2),
+                      ),
+                      child: const Icon(Icons.camera_alt_outlined,
+                          size: 15, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Customer photo',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  widget.selectedBytes == null
+                      ? 'Optional, compressed before upload'
+                      : 'Photo ready to upload',
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: widget.onTap,
+                  icon: Icon(
+                    widget.selectedBytes == null
+                        ? Icons.add_a_photo_outlined
+                        : Icons.edit_outlined,
+                    size: 17,
+                  ),
+                  label: Text(widget.selectedBytes == null
+                      ? 'Add photo'
+                      : 'Change photo'),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -367,7 +530,7 @@ class _PhoneField extends StatelessWidget {
       textInputAction: TextInputAction.next,
       onEditingComplete: onEditingComplete,
       maxLength: AppConstants.phoneLength,
-      style: GoogleFonts.poppins(fontSize: 15, letterSpacing: 1),
+      style: GoogleFonts.poppins(fontSize: 15),
       inputFormatters: [
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(AppConstants.phoneLength),
@@ -382,9 +545,9 @@ class _PhoneField extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
+              const Text(
                 '${AppConstants.defaultCountryFlag}  ',
-                style: const TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16),
               ),
               Text(
                 AppConstants.defaultCountryCode,
@@ -416,8 +579,7 @@ class _SectionLabel extends StatelessWidget {
       style: GoogleFonts.poppins(
         fontSize: 11,
         fontWeight: FontWeight.w700,
-        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.45),
-        letterSpacing: 1.2,
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
       ),
     );
   }

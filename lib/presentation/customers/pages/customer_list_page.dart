@@ -10,6 +10,7 @@ import '../../../core/providers/customer_providers.dart';
 import '../../../core/providers/payment_promise_providers.dart';
 import '../../../core/router/app_router.dart';
 import '../../../domain/entities/customer_entity.dart';
+import '../../../domain/entities/payment_promise_entity.dart';
 import '../../common/widgets/common_widgets.dart';
 import '../providers/customer_list_provider.dart';
 import '../widgets/customer_card.dart';
@@ -24,6 +25,8 @@ class CustomerListPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final customersAsync = ref.watch(customersStreamProvider);
     final sharedCustomersAsync = ref.watch(sharedCustomersStreamProvider);
+    final promisesAsync = ref.watch(paymentPromisesStreamProvider);
+    final promiseFilter = ref.watch(paymentPromiseFilterProvider);
     final filteredCustomers = ref.watch(filteredCustomersByPromiseProvider);
     final listState = ref.watch(customerListProvider);
 
@@ -55,12 +58,20 @@ class CustomerListPage extends ConsumerWidget {
           // ── List Body ──────────────────────────────────────────────────
           Expanded(
             child: listState.isSearching
-                ? _buildSearchResults(context, ref, listState)
+                ? _buildSearchResults(
+                    context,
+                    ref,
+                    listState,
+                    promiseFilter: promiseFilter,
+                    filteredCustomers: filteredCustomers,
+                  )
                 : _buildCustomerList(
                     context,
                     ref,
                     customersAsync: customersAsync,
                     sharedCustomersAsync: sharedCustomersAsync,
+                    promisesAsync: promisesAsync,
+                    promiseFilter: promiseFilter,
                     visibleCustomers: filteredCustomers,
                   ),
           ),
@@ -106,20 +117,36 @@ class CustomerListPage extends ConsumerWidget {
     WidgetRef ref, {
     required AsyncValue<List<CustomerEntity>> customersAsync,
     required AsyncValue<List<CustomerEntity>> sharedCustomersAsync,
+    required AsyncValue<List<PaymentPromiseEntity>> promisesAsync,
+    required PaymentPromiseFilter promiseFilter,
     required List<CustomerEntity> visibleCustomers,
   }) {
     if (visibleCustomers.isNotEmpty) {
       return _buildList(context, ref, visibleCustomers);
     }
 
-    if (customersAsync.isLoading || sharedCustomersAsync.isLoading) {
+    final customersPending =
+        customersAsync.isLoading && customersAsync.valueOrNull == null;
+    final sharedPending = promiseFilter == PaymentPromiseFilter.all &&
+        sharedCustomersAsync.isLoading &&
+        sharedCustomersAsync.valueOrNull == null;
+    final promisesPending = promiseFilter != PaymentPromiseFilter.all &&
+        promisesAsync.isLoading &&
+        promisesAsync.valueOrNull == null;
+    if (customersPending || sharedPending || promisesPending) {
       return _buildShimmerList();
     }
 
-    final error =
-        customersAsync.asError?.error ?? sharedCustomersAsync.asError?.error;
+    final error = customersAsync.asError?.error ??
+        (promiseFilter == PaymentPromiseFilter.all
+            ? sharedCustomersAsync.asError?.error
+            : promisesAsync.asError?.error);
     if (error != null) {
       return _buildErrorState(context, error.toString());
+    }
+
+    if (promiseFilter != PaymentPromiseFilter.all) {
+      return _buildPromiseFilterEmptyState(context, ref, promiseFilter);
     }
 
     return _buildEmptyState(context);
@@ -130,16 +157,28 @@ class CustomerListPage extends ConsumerWidget {
   Widget _buildSearchResults(
     BuildContext context,
     WidgetRef ref,
-    CustomerListState state,
-  ) {
+    CustomerListState state, {
+    required PaymentPromiseFilter promiseFilter,
+    required List<CustomerEntity> filteredCustomers,
+  }) {
     if (state.isSearchLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final results = state.searchResults ?? [];
+    final rawResults = state.searchResults ?? const <CustomerEntity>[];
+    final allowedIds = filteredCustomers.map((customer) => customer.id).toSet();
+    final results = promiseFilter == PaymentPromiseFilter.all
+        ? rawResults
+        : rawResults
+            .where((customer) => allowedIds.contains(customer.id))
+            .toList();
 
     if (results.isEmpty && state.hasSearchQuery) {
-      return _buildSearchEmptyState(context, state.searchQuery);
+      return _buildSearchEmptyState(
+        context,
+        state.searchQuery,
+        filter: promiseFilter,
+      );
     }
 
     return _buildList(context, ref, results);
@@ -255,7 +294,11 @@ class CustomerListPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildSearchEmptyState(BuildContext context, String query) {
+  Widget _buildSearchEmptyState(
+    BuildContext context,
+    String query, {
+    PaymentPromiseFilter filter = PaymentPromiseFilter.all,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Center(
@@ -281,12 +324,62 @@ class CustomerListPage extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Try a different name or check spelling.',
+              filter == PaymentPromiseFilter.all
+                  ? 'Try a different name or mobile number.'
+                  : 'No ${filter.label.toLowerCase()} customer matches this search.',
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 color: colorScheme.onSurface.withOpacity(0.4),
               ),
               textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPromiseFilterEmptyState(
+    BuildContext context,
+    WidgetRef ref,
+    PaymentPromiseFilter filter,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.event_available_outlined,
+              size: 58,
+              color: colorScheme.primary.withOpacity(0.35),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No customers for ${filter.label.toLowerCase()}',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This list is up to date.',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: colorScheme.onSurface.withOpacity(0.5),
+              ),
+            ),
+            const SizedBox(height: 20),
+            TextButton.icon(
+              onPressed: () => ref
+                  .read(paymentPromiseFilterProvider.notifier)
+                  .state = PaymentPromiseFilter.all,
+              icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+              label: const Text('Clear filter'),
             ),
           ],
         ),

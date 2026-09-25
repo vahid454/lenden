@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/providers/auth_providers.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/router/app_router.dart';
 
 class SplashPage extends ConsumerStatefulWidget {
@@ -20,8 +21,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
   @override
   void initState() {
     super.initState();
-    // Minimum 1.8s splash, then navigate when auth resolves
-    Future.delayed(const Duration(milliseconds: 1800), _navigate);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _navigate());
   }
 
   void _navigate() {
@@ -30,7 +30,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     final authState = ref.read(authStateProvider);
     // If still loading, wait a bit more and retry
     if (authState.isLoading) {
-      Future.delayed(const Duration(milliseconds: 500), _navigate);
+      Future.delayed(const Duration(milliseconds: 120), _navigate);
       return;
     }
 
@@ -43,7 +43,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
       // Firebase signed in but no profile — go to profile setup
       context.go(AppRoutes.profileSetup, extra: {
         'userId': user.id,
-        'phone':  user.phone,
+        'phone': user.phone,
       });
     } else {
       context.go(AppRoutes.dashboard);
@@ -52,7 +52,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Also listen so if auth resolves AFTER the 1.8s delay we still navigate
+    // Navigate as soon as Firebase resolves the persisted session.
     ref.listen(authStateProvider, (_, next) {
       if (!next.isLoading) _navigate();
     });
@@ -66,14 +66,15 @@ class _SplashPageState extends ConsumerState<SplashPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 100, height: 100,
+              width: 100,
+              height: 100,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.25),
-                    blurRadius: 40, 
+                    blurRadius: 40,
                     offset: const Offset(0, 16),
                   ),
                   BoxShadow(
@@ -84,34 +85,43 @@ class _SplashPageState extends ConsumerState<SplashPage> {
                 ],
               ),
               child: Center(
-                child: Text('₹', style: GoogleFonts.poppins(
-                    fontSize: 54, fontWeight: FontWeight.w800,
-                    color: cs.primary,
-                    height: 1)),
+                child: Text('₹',
+                    style: GoogleFonts.poppins(
+                        fontSize: 54,
+                        fontWeight: FontWeight.w800,
+                        color: cs.primary,
+                        height: 1)),
               ),
             )
                 .animate()
-                .scale(begin: const Offset(0.4, 0.4),
-                    curve: Curves.elasticOut, duration: 900.ms)
+                .scale(
+                    begin: const Offset(0.4, 0.4),
+                    curve: Curves.elasticOut,
+                    duration: 900.ms)
                 .fadeIn(duration: 400.ms),
             const SizedBox(height: 32),
-            Text('LenDen', style: GoogleFonts.poppins(
-                fontSize: 42, fontWeight: FontWeight.w800,
-                color: Colors.white, letterSpacing: -1.2))
+            Text('LenDen',
+                    style: GoogleFonts.poppins(
+                        fontSize: 42,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 0))
                 .animate()
                 .fadeIn(delay: 300.ms, duration: 500.ms)
                 .slideY(begin: 0.3, end: 0, curve: Curves.easeOut),
             const SizedBox(height: 12),
-            Text('Your accounts, in your hands',
-                style: GoogleFonts.poppins(
-                    fontSize: 16, 
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white.withValues(alpha: 0.8),
-                    letterSpacing: 0.3))
-                .animate().fadeIn(delay: 500.ms),
+            Text(AppConstants.appTagline,
+                    style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withValues(alpha: 0.8),
+                        letterSpacing: 0))
+                .animate()
+                .fadeIn(delay: 500.ms),
             const SizedBox(height: 60),
             SizedBox(
-              width: 28, height: 28,
+              width: 28,
+              height: 28,
               child: CircularProgressIndicator(
                 strokeWidth: 2.5,
                 valueColor: AlwaysStoppedAnimation<Color>(

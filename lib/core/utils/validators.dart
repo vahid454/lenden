@@ -59,6 +59,13 @@ class Validators {
     return null;
   }
 
+  static String? email(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter your email address';
+    }
+    return optionalEmail(value);
+  }
+
   /// Validates a monetary amount string.
   static String? amount(String? value) {
     if (value == null || value.isEmpty) {

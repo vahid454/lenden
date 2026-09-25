@@ -8,8 +8,10 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../domain/entities/customer_entity.dart';
+import '../../domain/entities/collection_report_entry.dart';
 import '../../domain/entities/transaction_entity.dart';
 import '../../presentation/cashbook/providers/cashbook_provider.dart';
+import '../constants/app_constants.dart';
 import '../utils/app_formatters.dart';
 
 /// Generates a professionally styled PDF ledger report.
@@ -124,6 +126,111 @@ class PdfExportService {
     return file;
   }
 
+  Future<File> generatePromiseReport({
+    required List<CollectionReportEntry> entries,
+    required String userName,
+    required String businessName,
+    required String reportTitle,
+  }) async {
+    final doc = pw.Document(compress: true);
+    final font = await PdfGoogleFonts.poppinsRegular();
+    final bold = await PdfGoogleFonts.poppinsBold();
+    final total = entries.fold<double>(
+      0,
+      (sum, entry) => sum + entry.collectionAmount,
+    );
+
+    doc.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4.landscape,
+      margin: const pw.EdgeInsets.all(28),
+      build: (_) => [
+        _buildHeader(font, bold, businessName, userName),
+        pw.SizedBox(height: 14),
+        pw.Text(reportTitle,
+            style: pw.TextStyle(font: bold, fontSize: 15, color: _textDark)),
+        pw.SizedBox(height: 6),
+        pw.Text(
+          '${entries.length} customers  |  Due ${AppFormatters.rupee(total)}',
+          style: pw.TextStyle(font: font, fontSize: 10, color: _textMuted),
+        ),
+        pw.SizedBox(height: 12),
+        if (entries.isEmpty)
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.all(16),
+            color: _lightGray,
+            child: pw.Text('No customers match the selected filters.',
+                style: pw.TextStyle(font: font, fontSize: 10)),
+          )
+        else
+          pw.Table(
+            border: pw.TableBorder.all(color: _borderGray, width: 0.5),
+            columnWidths: const {
+              0: pw.FlexColumnWidth(1.4),
+              1: pw.FlexColumnWidth(2.4),
+              2: pw.FlexColumnWidth(2.2),
+              3: pw.FlexColumnWidth(1.5),
+              4: pw.FlexColumnWidth(1.5),
+              5: pw.FlexColumnWidth(1.5),
+              6: pw.FlexColumnWidth(1.4),
+            },
+            children: [
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: _lightGray),
+                children: [
+                  'DUE DATE',
+                  'CUSTOMER',
+                  'PHONE',
+                  'OUTSTANDING',
+                  'PROMISED',
+                  'DUE AMOUNT',
+                  'STATUS',
+                ]
+                    .map((text) => _promiseCell(bold, text, header: true))
+                    .toList(),
+              ),
+              ...entries.map((entry) {
+                final customer = entry.customer;
+                final promise = entry.promise;
+                final phones = [customer.phone, customer.secondaryPhone]
+                    .whereType<String>()
+                    .where((value) => value.isNotEmpty)
+                    .join(' / ');
+                return pw.TableRow(children: [
+                  _promiseCell(
+                    font,
+                    promise == null
+                        ? 'No promise'
+                        : DateFormat('dd MMM yyyy')
+                            .format(promise.promisedDate),
+                  ),
+                  _promiseCell(font, customer.name),
+                  _promiseCell(font, phones),
+                  _promiseCell(font, AppFormatters.rupee(customer.absBalance)),
+                  _promiseCell(
+                      font,
+                      promise == null
+                          ? '-'
+                          : AppFormatters.rupee(promise.amount)),
+                  _promiseCell(
+                      font, AppFormatters.rupee(entry.collectionAmount)),
+                  _promiseCell(font, entry.statusLabel),
+                ]);
+              }),
+            ],
+          ),
+      ],
+      footer: (ctx) => _buildFooter(font, ctx.pageNumber, ctx.pagesCount),
+    ));
+
+    final dir = await getTemporaryDirectory();
+    final suffix = DateFormat('yyyyMMdd').format(DateTime.now());
+    final file = File('${dir.path}/LenDen_Collection_Report_$suffix.pdf');
+    await file.writeAsBytes(await doc.save());
+    _log.i('Collection report PDF generated: ${file.path}');
+    return file;
+  }
+
   // ── Generate cashbook report PDF ─────────────────────────────────────────
 
   Future<File> generateCashbookReport({
@@ -208,6 +315,9 @@ class PdfExportService {
             pw.Text('LenDen',
                 style: pw.TextStyle(
                     font: bold, fontSize: 24, color: PdfColors.white)),
+            pw.Text(AppConstants.appTagline,
+                style: pw.TextStyle(
+                    font: font, fontSize: 8, color: PdfColors.white)),
             if (bizName.isNotEmpty)
               pw.Text(bizName,
                   style: pw.TextStyle(
@@ -507,6 +617,20 @@ class PdfExportService {
         alignment: pw.Alignment.centerRight,
         child: pw.Text(text,
             style: pw.TextStyle(font: font, fontSize: 8, color: color)),
+      ),
+    );
+  }
+
+  pw.Widget _promiseCell(pw.Font font, String text, {bool header = false}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          font: font,
+          fontSize: header ? 8 : 8.5,
+          color: header ? _textMuted : _textDark,
+        ),
       ),
     );
   }

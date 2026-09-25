@@ -29,12 +29,13 @@ class OtpVerificationPage extends ConsumerStatefulWidget {
       _OtpVerificationPageState();
 }
 
-class _OtpVerificationPageState
-    extends ConsumerState<OtpVerificationPage> {
-  final _otpCtrl   = TextEditingController();
-  late Timer _timer;
+class _OtpVerificationPageState extends ConsumerState<OtpVerificationPage> {
+  final _otpCtrl = TextEditingController();
+  Timer? _timer;
   int _secondsLeft = AppConstants.resendCooldown.inSeconds;
   late String _verificationId;
+  bool _verificationInFlight = false;
+  bool _resendInFlight = false;
 
   @override
   void initState() {
@@ -45,28 +46,40 @@ class _OtpVerificationPageState
 
   @override
   void dispose() {
-    _timer.cancel();
+    _timer?.cancel();
     _otpCtrl.dispose();
     super.dispose();
   }
 
   void _startTimer() {
+    _timer?.cancel();
     _secondsLeft = AppConstants.resendCooldown.inSeconds;
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) { t.cancel(); return; }
-      if (_secondsLeft <= 0) { t.cancel(); return; }
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      if (_secondsLeft <= 0) {
+        t.cancel();
+        return;
+      }
       setState(() => _secondsLeft--);
     });
   }
 
   Future<void> _verify(String otp) async {
+    if (_verificationInFlight || _resendInFlight) return;
     if (otp.length != AppConstants.otpLength) return;
     FocusScope.of(context).unfocus();
 
-    final notifier = ref.read(otpVerificationProvider(_verificationId).notifier);
-    final user     = await notifier.verifyOtp(otp: otp);
+    setState(() => _verificationInFlight = true);
+
+    final notifier =
+        ref.read(otpVerificationProvider(_verificationId).notifier);
+    final user = await notifier.verifyOtp(otp: otp);
 
     if (!mounted) return;
+    setState(() => _verificationInFlight = false);
 
     final errState = ref.read(otpVerificationProvider(_verificationId));
     if (errState.errorMessage != null) return;
@@ -80,18 +93,22 @@ class _OtpVerificationPageState
       if (uid != null && mounted) {
         context.go(AppRoutes.profileSetup, extra: {
           'userId': uid,
-          'phone':  widget.phoneNumber,
+          'phone': widget.phoneNumber,
         });
       }
     }
   }
 
   Future<void> _resend() async {
-    if (_secondsLeft > 0) return;
+    if (_secondsLeft > 0 || _resendInFlight || _verificationInFlight) return;
     _otpCtrl.clear();
+    setState(() => _resendInFlight = true);
 
-    final notifier = ref.read(otpVerificationProvider(_verificationId).notifier);
-    final newId    = await notifier.resendOtp(widget.phoneNumber);
+    final notifier =
+        ref.read(otpVerificationProvider(_verificationId).notifier);
+    final newId = await notifier.resendOtp(widget.phoneNumber);
+    if (!mounted) return;
+    setState(() => _resendInFlight = false);
     if (newId != null && mounted) {
       setState(() => _verificationId = newId);
       _startTimer();
@@ -100,16 +117,17 @@ class _OtpVerificationPageState
 
   @override
   Widget build(BuildContext context) {
-    final state  = ref.watch(otpVerificationProvider(_verificationId));
-    final cs     = Theme.of(context).colorScheme;
+    final state = ref.watch(otpVerificationProvider(_verificationId));
+    final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final defaultTheme = PinTheme(
-      width: 52, height: 60,
+      width: 52,
+      height: 60,
       textStyle: GoogleFonts.poppins(
           fontSize: 22, fontWeight: FontWeight.w600, color: cs.onSurface),
       decoration: BoxDecoration(
-        color:        isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
+        color: isDark ? AppColors.darkSurfaceVariant : AppColors.surfaceVariant,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
       ),
@@ -131,7 +149,7 @@ class _OtpVerificationPageState
           child: SafeArea(
             child: LoadingOverlay(
               isLoading: state.isLoading,
-              message:   'Verifying OTP…',
+              message: 'Verifying OTP…',
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
@@ -144,79 +162,108 @@ class _OtpVerificationPageState
                       padding: EdgeInsets.zero,
                     ),
                     const SizedBox(height: 32),
-
-                    Center(child: Container(
-                      width: 80, height: 80,
+                    Center(
+                        child: Container(
+                      width: 80,
+                      height: 80,
                       decoration: BoxDecoration(
                           color: cs.primary.withOpacity(0.1),
                           shape: BoxShape.circle),
-                      child: Icon(Icons.sms_outlined, size: 36, color: cs.primary),
-                    ).animate().scale(curve: Curves.elasticOut, duration: 600.ms)),
-
+                      child:
+                          Icon(Icons.sms_outlined, size: 36, color: cs.primary),
+                    )
+                            .animate()
+                            .scale(curve: Curves.elasticOut, duration: 600.ms)),
                     const SizedBox(height: 24),
-                    Center(child: Text('Verify your number',
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w700))
-                        .animate().fadeIn(delay: 150.ms)),
+                    Center(
+                        child: Text('Verify your number',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700))
+                            .animate()
+                            .fadeIn(delay: 150.ms)),
+                    const SizedBox(height: 4),
+                    Center(
+                      child: Text(
+                        AppConstants.appTagline,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: cs.primary,
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 8),
-                    Center(child: RichText(
+                    Center(
+                        child: RichText(
                       textAlign: TextAlign.center,
                       text: TextSpan(
-                        style: GoogleFonts.poppins(fontSize: 14,
-                            color: cs.onSurface.withOpacity(0.6)),
+                        style: GoogleFonts.poppins(
+                            fontSize: 14, color: cs.onSurface.withOpacity(0.6)),
                         children: [
-                          const TextSpan(text: 'Enter the 6-digit OTP sent to\n'),
-                          TextSpan(text: widget.phoneNumber,
-                              style: const TextStyle(fontWeight: FontWeight.w700)),
+                          const TextSpan(
+                              text: 'Enter the 6-digit OTP sent to\n'),
+                          TextSpan(
+                              text: widget.phoneNumber,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
                         ],
                       ),
                     ).animate().fadeIn(delay: 200.ms)),
-
                     const SizedBox(height: 36),
-
-                    Center(child: Pinput(
-                      controller:  _otpCtrl,
-                      length:      AppConstants.otpLength,
-                      autofocus:   true,
-                      defaultPinTheme:   defaultTheme,
-                      focusedPinTheme:   focusedTheme,
+                    Center(
+                        child: Pinput(
+                      controller: _otpCtrl,
+                      length: AppConstants.otpLength,
+                      autofocus: true,
+                      defaultPinTheme: defaultTheme,
+                      focusedPinTheme: focusedTheme,
                       submittedPinTheme: focusedTheme,
-                      errorPinTheme:     errorTheme,
+                      errorPinTheme: errorTheme,
                       keyboardType: TextInputType.number,
-                      onCompleted:  _verify,
+                      onCompleted: _verify,
                       hapticFeedbackType: HapticFeedbackType.mediumImpact,
                       closeKeyboardWhenCompleted: true,
                     ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.2)),
-
                     const SizedBox(height: 20),
                     if (state.errorMessage != null)
                       ErrorDisplay(message: state.errorMessage!)
-                          .animate().fadeIn().shakeX(amount: 4),
-
+                          .animate()
+                          .fadeIn()
+                          .shakeX(amount: 4),
                     const SizedBox(height: 32),
                     AppButton(
-                      label:       'Verify OTP',
-                      onPressed:   state.isLoading ? null : () => _verify(_otpCtrl.text),
-                      isLoading:   state.isLoading,
+                      label: 'Verify OTP',
+                      onPressed: state.isLoading || _verificationInFlight
+                          ? null
+                          : () => _verify(_otpCtrl.text),
+                      isLoading: state.isLoading || _verificationInFlight,
                       leadingIcon: Icons.verified_outlined,
                     ).animate().fadeIn(delay: 400.ms),
-
                     const SizedBox(height: 24),
-                    Center(child: Column(children: [
+                    Center(
+                        child: Column(children: [
                       Text("Didn't receive the OTP?",
-                          style: GoogleFonts.poppins(fontSize: 13,
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
                               color: cs.onSurface.withOpacity(0.5))),
                       const SizedBox(height: 4),
                       _secondsLeft > 0
                           ? Text('Resend in ${_secondsLeft}s',
-                              style: GoogleFonts.poppins(fontSize: 14,
+                              style: GoogleFonts.poppins(
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                   color: cs.onSurface.withOpacity(0.35)))
                           : GestureDetector(
-                              onTap: state.isLoading ? null : _resend,
+                              onTap: state.isLoading || _resendInFlight
+                                  ? null
+                                  : _resend,
                               child: Text('Resend OTP',
-                                  style: GoogleFonts.poppins(fontSize: 14,
-                                      fontWeight: FontWeight.w600, color: cs.primary,
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: cs.primary,
                                       decoration: TextDecoration.underline)),
                             ),
                     ])).animate().fadeIn(delay: 500.ms),

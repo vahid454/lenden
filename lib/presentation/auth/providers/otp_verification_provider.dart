@@ -6,32 +6,32 @@ import '../../../domain/entities/user_entity.dart';
 // ── State ─────────────────────────────────────────────────────────────────────
 
 class OtpVerificationState {
-  final bool    isLoading;
+  final bool isLoading;
   final String? errorMessage;
-  final String  verificationId;
+  final String verificationId;
 
   const OtpVerificationState({
     required this.verificationId,
-    this.isLoading    = false,
+    this.isLoading = false,
     this.errorMessage,
   });
 
   OtpVerificationState copyWith({
-    bool?   isLoading,
+    bool? isLoading,
     String? errorMessage,
-    bool    clearError      = false,
+    bool clearError = false,
     String? verificationId,
-  }) => OtpVerificationState(
-    verificationId: verificationId ?? this.verificationId,
-    isLoading:      isLoading      ?? this.isLoading,
-    errorMessage:   clearError ? null : errorMessage ?? this.errorMessage,
-  );
+  }) =>
+      OtpVerificationState(
+        verificationId: verificationId ?? this.verificationId,
+        isLoading: isLoading ?? this.isLoading,
+        errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
+      );
 }
 
 // ── Notifier ──────────────────────────────────────────────────────────────────
 
-class OtpVerificationNotifier
-    extends StateNotifier<OtpVerificationState> {
+class OtpVerificationNotifier extends StateNotifier<OtpVerificationState> {
   final Ref _ref;
 
   OtpVerificationNotifier(this._ref, String verificationId)
@@ -39,10 +39,11 @@ class OtpVerificationNotifier
 
   /// Returns [UserEntity] for existing users, null for new users.
   Future<UserEntity?> verifyOtp({required String otp}) async {
+    if (state.isLoading) return null;
     state = state.copyWith(isLoading: true, clearError: true);
 
     final useCase = _ref.read(verifyOtpUseCaseProvider);
-    final result  = await useCase(
+    final result = await useCase(
       verificationId: state.verificationId,
       otp: otp,
     );
@@ -61,10 +62,11 @@ class OtpVerificationNotifier
 
   /// Resends OTP and updates verificationId. Returns new verificationId.
   Future<String?> resendOtp(String phoneNumber) async {
+    if (state.isLoading) return null;
     state = state.copyWith(isLoading: true, clearError: true);
 
     final useCase = _ref.read(sendOtpUseCaseProvider);
-    final result  = await useCase(phoneNumber);
+    final result = await useCase(phoneNumber);
 
     return result.fold(
       (failure) {
@@ -73,7 +75,7 @@ class OtpVerificationNotifier
       },
       (newVerificationId) {
         state = state.copyWith(
-          isLoading:      false,
+          isLoading: false,
           verificationId: newVerificationId,
         );
         return newVerificationId;

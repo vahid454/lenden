@@ -13,6 +13,7 @@ class AppConstants {
   // ── Firestore Collection Names ────────────────────────────────────────────
   static const String colUsers = 'users';
   static const String colCustomers = 'customers';
+  static const String colCustomerPhoneKeys = 'customerPhoneKeys';
   static const String colTransactions = 'transactions';
   static const String colPaymentPromises = 'paymentPromises';
 
@@ -23,7 +24,7 @@ class AppConstants {
   // ── OTP Config ────────────────────────────────────────────────────────────
   static const int otpLength = 6;
   static const Duration otpTimeout = Duration(seconds: 60);
-  static const Duration resendCooldown = Duration(seconds: 30);
+  static const Duration resendCooldown = Duration(seconds: 60);
 
   // ── Validation ────────────────────────────────────────────────────────────
   static const int minNameLength = 2;
@@ -41,8 +42,8 @@ class AppConstants {
 
   // ── App Info ──────────────────────────────────────────────────────────────
   static const String appName = 'LenDen';
-  static const String appVersion = '1.0.0';
-  static const String appTagline = 'Apna hisaab, apni marzi';
+  static const String appVersion = '1.0.3';
+  static const String appTagline = 'Apna Hisab, Apne Sath';
   static const String supportEmail = 'vahidmansuri702@gmail.com';
   static const String privacyPolicyUrl = 'https://lenden.app/privacy';
 

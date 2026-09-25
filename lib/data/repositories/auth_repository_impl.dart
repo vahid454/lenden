@@ -1,5 +1,4 @@
 import 'package:dartz/dartz.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:logger/logger.dart';
 
 import '../../core/errors/exceptions.dart';
@@ -14,7 +13,7 @@ class AuthRepositoryImpl implements AuthRepository {
 
   AuthRepositoryImpl({required AuthRemoteDataSource remote, Logger? logger})
       : _remote = remote,
-        _log    = logger ?? Logger();
+        _log = logger ?? Logger();
 
   @override
   Future<Either<Failure, String>> sendOtp(String phoneNumber) async {
@@ -23,6 +22,7 @@ class AuthRepositoryImpl implements AuthRepository {
     } on AppException catch (e) {
       return Left(_fromException(e));
     } catch (e) {
+      _log.e('sendOtp failed', error: e);
       return Left(OtpSendFailure(e.toString()));
     }
   }
@@ -33,13 +33,14 @@ class AuthRepositoryImpl implements AuthRepository {
     required String otp,
   }) async {
     try {
-      final fbUser = await _remote.verifyOtp(
-          verificationId: verificationId, otp: otp);
+      final fbUser =
+          await _remote.verifyOtp(verificationId: verificationId, otp: otp);
       final profile = await _remote.getUserProfile(fbUser.uid);
       return Right(profile); // null = new user
     } on AppException catch (e) {
       return Left(_fromException(e));
     } catch (e) {
+      _log.e('verifyOtp failed', error: e);
       return Left(OtpVerifyFailure(e.toString()));
     }
   }
@@ -54,7 +55,9 @@ class AuthRepositoryImpl implements AuthRepository {
   }) async {
     try {
       final model = await _remote.saveUserProfile(
-        userId: userId, name: name, phone: phone,
+        userId: userId,
+        name: name,
+        phone: phone,
         email: email,
         businessName: businessName,
       );
@@ -62,6 +65,7 @@ class AuthRepositoryImpl implements AuthRepository {
     } on AppException catch (e) {
       return Left(ServerFailure(e.message));
     } catch (e) {
+      _log.e('saveUserProfile failed', error: e);
       return Left(ServerFailure(e.toString()));
     }
   }
@@ -99,17 +103,17 @@ class AuthRepositoryImpl implements AuthRepository {
         // Return a skeleton entity with EMPTY name so the router
         // knows to send the user to profile setup.
         return UserEntity(
-          id:        fbUser.uid,
-          name:      '',           // ← empty name = no profile yet
-          phone:     fbUser.phoneNumber ?? '',
+          id: fbUser.uid,
+          name: '', // ← empty name = no profile yet
+          phone: fbUser.phoneNumber ?? '',
           createdAt: DateTime.now(),
         );
       } catch (_) {
         // On any error, return skeleton so app doesn't get stuck on splash
         return UserEntity(
-          id:        fbUser.uid,
-          name:      '',
-          phone:     fbUser.phoneNumber ?? '',
+          id: fbUser.uid,
+          name: '',
+          phone: fbUser.phoneNumber ?? '',
           createdAt: DateTime.now(),
         );
       }
@@ -119,11 +123,16 @@ class AuthRepositoryImpl implements AuthRepository {
   Failure _fromException(AppException e) {
     switch (e.code) {
       case 'invalid-verification-code':
-      case 'invalid-verification-id': return OtpVerifyFailure(e.message);
-      case 'session-expired':          return const OtpExpiredFailure();
-      case 'too-many-requests':        return const TooManyRequestsFailure();
-      case 'network-request-failed':   return const NetworkFailure();
-      default:                         return AuthFailure(e.message);
+      case 'invalid-verification-id':
+        return OtpVerifyFailure(e.message);
+      case 'session-expired':
+        return const OtpExpiredFailure();
+      case 'too-many-requests':
+        return const TooManyRequestsFailure();
+      case 'network-request-failed':
+        return const NetworkFailure();
+      default:
+        return AuthFailure(e.message);
     }
   }
 }

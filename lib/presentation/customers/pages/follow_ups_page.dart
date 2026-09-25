@@ -5,9 +5,11 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/providers/auth_providers.dart';
 import '../../../core/providers/customer_providers.dart';
 import '../../../core/providers/payment_promise_providers.dart';
 import '../../../core/utils/app_formatters.dart';
+import '../../../core/utils/payment_reminder_message.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/payment_promise_entity.dart';
 import '../../../domain/entities/transaction_entity.dart';
@@ -33,7 +35,10 @@ class _FollowUpsPageState extends ConsumerState<FollowUpsPage> {
         customer.id: customer,
     };
     final now = DateTime.now();
-    final openPromises = promises.where((promise) => promise.isOpen).toList();
+    final openPromises = promises
+        .where((promise) =>
+            promise.isOpen && (customers[promise.customerId]?.balance ?? 0) > 0)
+        .toList();
     final filtered = openPromises.where((promise) {
       if (_filter == PaymentPromiseFilter.dueThisWeek) {
         return promise.isDueThisWeek(now) && !promise.isDueOn(now);
@@ -120,11 +125,21 @@ class _FollowUpsPageState extends ConsumerState<FollowUpsPage> {
     CustomerEntity customer,
     PaymentPromiseEntity promise,
   ) async {
-    final message =
-        'Hi ${customer.name}, friendly reminder regarding your pending '
-        '${AppFormatters.rupee(promise.remainingAmount)} payment. As discussed, '
-        'you had mentioned ${DateFormat('d MMMM').format(promise.promisedDate)}. '
-        'Please send it when convenient. Thank you.';
+    final user = ref.read(currentUserProvider);
+    final business = user?.businessName?.trim() ?? '';
+    final owner = user?.name.trim() ?? '';
+    final sender = business.isNotEmpty
+        ? business
+        : owner.isNotEmpty
+            ? owner
+            : 'LenDen';
+    final message = PaymentReminderMessage.build(
+      customerName: customer.name,
+      senderName: sender,
+      amount: promise.remainingAmount,
+      ownerOwes: false,
+      dueDate: promise.promisedDate,
+    );
     final uri = Uri.parse(
       'whatsapp://send?phone=91${customer.phone}&text=${Uri.encodeComponent(message)}',
     );

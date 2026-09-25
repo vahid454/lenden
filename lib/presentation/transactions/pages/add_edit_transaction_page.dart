@@ -429,6 +429,7 @@ class _BigAmountField extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
+      clipBehavior: Clip.antiAlias,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.surface,
@@ -446,8 +447,9 @@ class _BigAmountField extends StatelessWidget {
             autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             textInputAction: TextInputAction.next,
+            maxLines: 1,
             style: GoogleFonts.poppins(
-                fontSize: 32, fontWeight: FontWeight.w700, color: accent),
+                fontSize: 28, fontWeight: FontWeight.w700, color: accent),
             inputFormatters: [
               _AmountInputFormatter(),
             ],
@@ -468,6 +470,7 @@ class _BigAmountField extends StatelessWidget {
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
               errorBorder: InputBorder.none,
+              errorStyle: GoogleFonts.poppins(fontSize: 10, height: 1),
               contentPadding: EdgeInsets.zero,
             ),
           ),

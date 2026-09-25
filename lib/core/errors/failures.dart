@@ -50,7 +50,7 @@ class OtpExpiredFailure extends Failure {
 class TooManyRequestsFailure extends Failure {
   const TooManyRequestsFailure([
     super.message =
-        'Too many attempts. Please wait a few minutes and try again.',
+        'Firebase temporarily limited OTP requests for this phone or device. Wait 15 minutes, then request one new OTP.',
   ]);
 }
 

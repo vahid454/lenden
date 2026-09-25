@@ -35,6 +35,7 @@ class PhoneInputNotifier extends StateNotifier<PhoneInputState> {
   /// Sends OTP to [phoneNumber] (E.164 format).
   /// Returns the verificationId on success, null on failure.
   Future<String?> sendOtp(String phoneNumber) async {
+    if (state.isLoading) return null;
     state = state.copyWith(isLoading: true, clearError: true);
 
     final useCase = _ref.read(sendOtpUseCaseProvider);

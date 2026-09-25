@@ -8,6 +8,7 @@ class CustomerEntity extends Equatable {
   final String? secondaryPhone;
   final String? address;
   final String? notes;
+  final String? photoPath;
   final DateTime createdAt;
   final DateTime? updatedAt;
   final double balance;
@@ -27,6 +28,7 @@ class CustomerEntity extends Equatable {
     this.secondaryPhone,
     this.address,
     this.notes,
+    this.photoPath,
     required this.createdAt,
     this.updatedAt,
     this.balance = 0.0,
@@ -55,6 +57,7 @@ class CustomerEntity extends Equatable {
     String? secondaryPhone,
     String? address,
     String? notes,
+    String? photoPath,
     DateTime? createdAt,
     DateTime? updatedAt,
     double? balance,
@@ -63,6 +66,7 @@ class CustomerEntity extends Equatable {
     bool clearSecondaryPhone = false,
     bool clearAddress = false,
     bool clearNotes = false,
+    bool clearPhotoPath = false,
   }) {
     return CustomerEntity(
       id: id ?? this.id,
@@ -73,6 +77,7 @@ class CustomerEntity extends Equatable {
           clearSecondaryPhone ? null : secondaryPhone ?? this.secondaryPhone,
       address: clearAddress ? null : address ?? this.address,
       notes: clearNotes ? null : notes ?? this.notes,
+      photoPath: clearPhotoPath ? null : photoPath ?? this.photoPath,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       balance: balance ?? this.balance,
@@ -90,6 +95,7 @@ class CustomerEntity extends Equatable {
         secondaryPhone,
         address,
         notes,
+        photoPath,
         createdAt,
         updatedAt,
         balance,

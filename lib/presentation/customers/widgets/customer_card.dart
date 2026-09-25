@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/payment_promise_entity.dart';
+import 'customer_avatar_image.dart';
 
 /// Customer list tile for quick ledger access.
 class CustomerCard extends StatelessWidget {
@@ -101,8 +102,11 @@ class CustomerCard extends StatelessWidget {
                 padding: const EdgeInsets.all(14),
                 child: Row(children: [
                   // Avatar
-                  _CustomerAvatar(
-                      initials: customer.initials, color: balanceColor),
+                  CustomerAvatarImage(
+                    initials: customer.initials,
+                    photoPath: customer.photoPath,
+                    color: balanceColor,
+                  ),
                   const SizedBox(width: 12),
 
                   // Name + phone
@@ -253,26 +257,6 @@ class _PromiseBadge extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _CustomerAvatar extends StatelessWidget {
-  final String initials;
-  final Color color;
-  const _CustomerAvatar({required this.initials, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 46,
-      height: 46,
-      decoration:
-          BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
-      child: Center(
-          child: Text(initials,
-              style: GoogleFonts.poppins(
-                  fontSize: 16, fontWeight: FontWeight.w700, color: color))),
     );
   }
 }
