@@ -124,7 +124,7 @@ class _FollowUpsPageState extends ConsumerState<FollowUpsPage> {
 
   Future<void> _remind(CustomerEntity customer) async {
     final user = ref.read(currentUserProvider);
-    final message = PaymentReminderMessage.buildBilingual(
+    final message = PaymentReminderMessage.buildEnglish(
       customerName: customer.name,
       ownerName: user?.name ?? '',
       businessName: user?.businessName ?? '',

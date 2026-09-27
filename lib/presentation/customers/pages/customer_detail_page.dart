@@ -703,7 +703,7 @@ class _QuickActions extends StatelessWidget {
             if (!customer.isSettled) ...[
               _Btn(Icons.notifications_outlined, 'Remind',
                   const Color(0xFFD97706), () async {
-                final msg = PaymentReminderMessage.buildBilingual(
+                final msg = PaymentReminderMessage.buildEnglish(
                   customerName: customer.name,
                   ownerName: ownerName,
                   businessName: businessName,

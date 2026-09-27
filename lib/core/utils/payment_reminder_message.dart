@@ -3,7 +3,7 @@ import 'app_formatters.dart';
 class PaymentReminderMessage {
   PaymentReminderMessage._();
 
-  static String buildBilingual({
+  static String buildEnglish({
     required String customerName,
     required String ownerName,
     required String businessName,
@@ -17,32 +17,21 @@ class PaymentReminderMessage {
     final wholeRupees = balance.floor();
     final paise = ((balance - wholeRupees) * 100).round();
     final englishAmount = _englishNumber(wholeRupees);
-    final hindiAmount = _hindiNumber(wholeRupees);
     final englishWords = paise == 0
         ? '$englishAmount rupees'
         : '$englishAmount rupees and $paise paise';
-    final hindiWords = paise == 0
-        ? '$hindiAmount rupaye'
-        : '$hindiAmount rupaye aur $paise paise';
 
     if (amount < 0) {
-      return 'Hello $name Ji,\n\nNamaste,\n'
-          '$business ke khate ke anusaar $owner ke aapko $amountText ($hindiWords) dene baaki hain. '
-          'Kripya suvidha anusar bhugtan svikaar karne ki kripa karein.\n'
-          'Dhanyavaad,\n$owner\n\n'
-          'English:\nHello $name Ji,\n\n'
+      return 'Hello $name Ji,\n\n'
           '$amountText ($englishWords) is owed to you by $owner from $business. '
-          'Please collect it at your convenience.\n'
+          'Please accept the payment at your convenience.\n\n'
           'Thank you,\n$owner';
     }
 
-    return 'Hello $name Ji,\n\nNamaste,\n'
-        '$business ke aapke khate mein $amountText ($hindiWords) baaki hain. '
-        'Kripya $owner ko jald se jald bhugtan karne ki kripa karein.\n'
-        'Dhanyavaad,\n$owner\n\n'
-        'English:\nHello $name Ji,\n\n'
+    return 'Hello $name Ji,\n\n'
         '$amountText ($englishWords) is currently pending on your account at $business. '
-        'Kindly pay $owner at your earliest convenience.\n'
+        'Kindly pay $owner at the earliest. Please keep your financial commitments '
+        'up to date and avoid the risk of becoming a bank defaulter, where applicable.\n\n'
         'Thank you,\n$owner';
   }
 
@@ -122,138 +111,6 @@ class PaymentReminderMessage {
       (10000000, 'Crore'),
       (100000, 'Lakh'),
       (1000, 'Thousand'),
-    ]) {
-      final count = remaining ~/ scale.$1;
-      if (count > 0) {
-        groups.add('${underThousand(count)} ${scale.$2}');
-        remaining %= scale.$1;
-      }
-    }
-    if (remaining > 0) groups.add(underThousand(remaining));
-    return groups.join(' ');
-  }
-
-  static String _hindiNumber(int value) {
-    const words = [
-      'Shunya',
-      'Ek',
-      'Do',
-      'Teen',
-      'Chaar',
-      'Paanch',
-      'Chhah',
-      'Saat',
-      'Aath',
-      'Nau',
-      'Das',
-      'Gyarah',
-      'Barah',
-      'Terah',
-      'Chaudah',
-      'Pandrah',
-      'Solah',
-      'Satrah',
-      'Atharah',
-      'Unnees',
-      'Bees',
-      'Ikkis',
-      'Baais',
-      'Teis',
-      'Chaubis',
-      'Pachchis',
-      'Chhabis',
-      'Sattais',
-      'Atthais',
-      'Untis',
-      'Tees',
-      'Ikattis',
-      'Battis',
-      'Taintis',
-      'Chauntis',
-      'Paintis',
-      'Chhattis',
-      'Saintis',
-      'Adtis',
-      'Untalis',
-      'Chalis',
-      'Iktalis',
-      'Bayalis',
-      'Taintalis',
-      'Chawalis',
-      'Paintalis',
-      'Chiyalis',
-      'Saintalis',
-      'Atthalis',
-      'Unchaas',
-      'Pachaas',
-      'Ikyavan',
-      'Bavan',
-      'Tirpan',
-      'Chauvan',
-      'Pachpan',
-      'Chhappan',
-      'Sattavan',
-      'Athavan',
-      'Unsath',
-      'Saath',
-      'Iksath',
-      'Basath',
-      'Tirsath',
-      'Chaunsath',
-      'Painsath',
-      'Chhiyasath',
-      'Sadsath',
-      'Adsath',
-      'Unhattar',
-      'Sattar',
-      'Ikhattar',
-      'Bahattar',
-      'Tihattar',
-      'Chauhattar',
-      'Pachhattar',
-      'Chihattar',
-      'Satahattar',
-      'Athhattar',
-      'Unasi',
-      'Assi',
-      'Ikyasi',
-      'Bayasi',
-      'Tirasi',
-      'Chaurasi',
-      'Pachasi',
-      'Chhiyasi',
-      'Sattasi',
-      'Athasi',
-      'Navasi',
-      'Nabbe',
-      'Ikyaanve',
-      'Baanve',
-      'Tiraanve',
-      'Chauraanve',
-      'Pachaanve',
-      'Chhiyaanve',
-      'Sattaanve',
-      'Athaanve',
-      'Ninyaanve',
-    ];
-    String underHundred(int number) => words[number];
-    String underThousand(int number) {
-      final hundreds = number ~/ 100;
-      final remainder = number % 100;
-      return [
-        if (hundreds > 0) '${words[hundreds]} Sau',
-        if (remainder > 0) underHundred(remainder),
-      ].join(' ');
-    }
-
-    if (value == 0) return words.first;
-    if (value >= 1000000000) return value.toString();
-    final groups = <String>[];
-    var remaining = value;
-    for (final scale in const [
-      (10000000, 'Crore'),
-      (100000, 'Lakh'),
-      (1000, 'Hazar'),
     ]) {
       final count = remaining ~/ scale.$1;
       if (count > 0) {
