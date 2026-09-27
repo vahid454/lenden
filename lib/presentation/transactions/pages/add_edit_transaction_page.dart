@@ -18,6 +18,7 @@ class AddEditTransactionPage extends ConsumerStatefulWidget {
   final TransactionType? initialType;
   final double? initialAmount;
   final String? initialNote;
+  final String? promiseIdToFulfill;
   final TransactionEntity? existingTransaction;
 
   const AddEditTransactionPage({
@@ -28,6 +29,7 @@ class AddEditTransactionPage extends ConsumerStatefulWidget {
     this.initialType,
     this.initialAmount,
     this.initialNote,
+    this.promiseIdToFulfill,
     this.existingTransaction,
   });
 
@@ -113,6 +115,7 @@ class _AddEditTransactionPageState
         type: _type,
         date: _selectedDate,
         note: _noteCtrl.text,
+        promiseIdToFulfill: widget.promiseIdToFulfill,
       );
     }
 

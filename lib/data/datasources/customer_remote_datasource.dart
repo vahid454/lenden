@@ -216,6 +216,28 @@ class CustomerRemoteDataSource {
     }
   }
 
+  Future<void> setDefaulterStatus({
+    required String customerId,
+    required bool isDefaulter,
+    String? note,
+  }) async {
+    try {
+      await _col.doc(customerId).update({
+        'isDefaulter': isDefaulter,
+        'defaulterNote': isDefaulter && note != null && note.trim().isNotEmpty
+            ? note.trim()
+            : FieldValue.delete(),
+        'defaulterMarkedAt':
+            isDefaulter ? FieldValue.serverTimestamp() : FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      _logger.e('setDefaulterStatus: ${e.code}');
+      throw AppException('Could not update customer status: ${e.message}',
+          code: e.code);
+    }
+  }
+
   String _normalizePhone(String value) {
     final digits = value.replaceAll(RegExp(r'\D'), '');
     return digits.length <= 10 ? digits : digits.substring(digits.length - 10);

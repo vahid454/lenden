@@ -2,7 +2,14 @@ import 'dart:math' as math;
 
 import 'package:equatable/equatable.dart';
 
-enum PaymentPromiseStatus { pending, partialPaid, paid, missed, rescheduled }
+enum PaymentPromiseStatus {
+  pending,
+  partialPaid,
+  paid,
+  missed,
+  rescheduled,
+  cancelled,
+}
 
 extension PaymentPromiseStatusX on PaymentPromiseStatus {
   String get firestoreValue => switch (this) {
@@ -11,6 +18,7 @@ extension PaymentPromiseStatusX on PaymentPromiseStatus {
         PaymentPromiseStatus.paid => 'paid',
         PaymentPromiseStatus.missed => 'missed',
         PaymentPromiseStatus.rescheduled => 'rescheduled',
+        PaymentPromiseStatus.cancelled => 'cancelled',
       };
 
   String get label => switch (this) {
@@ -19,17 +27,19 @@ extension PaymentPromiseStatusX on PaymentPromiseStatus {
         PaymentPromiseStatus.paid => 'Paid',
         PaymentPromiseStatus.missed => 'Missed',
         PaymentPromiseStatus.rescheduled => 'Rescheduled',
+        PaymentPromiseStatus.cancelled => 'Cancelled',
       };
 
-  bool get isOpen =>
-      this == PaymentPromiseStatus.pending ||
-      this == PaymentPromiseStatus.partialPaid;
+  // A partial payment fulfils the commitment. The actual remaining customer
+  // balance continues to live in the ledger and can have a new promise later.
+  bool get isOpen => this == PaymentPromiseStatus.pending;
 
   static PaymentPromiseStatus fromString(String value) => switch (value) {
         'partialPaid' => PaymentPromiseStatus.partialPaid,
         'paid' => PaymentPromiseStatus.paid,
         'missed' => PaymentPromiseStatus.missed,
         'rescheduled' => PaymentPromiseStatus.rescheduled,
+        'cancelled' => PaymentPromiseStatus.cancelled,
         _ => PaymentPromiseStatus.pending,
       };
 }
@@ -136,3 +146,23 @@ class PaymentPromiseEntity extends Equatable {
 
 DateTime _dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
+
+PaymentPromiseEntity? selectPromiseForPayment({
+  required Iterable<PaymentPromiseEntity> promises,
+  required String customerId,
+  required DateTime paymentDate,
+  String? preferredPromiseId,
+}) {
+  final paymentDay = _dateOnly(paymentDate);
+  final eligible = promises.where((promise) =>
+      promise.customerId == customerId &&
+      promise.isOpen &&
+      !paymentDay.isBefore(_dateOnly(promise.createdAt)) &&
+      !paymentDay.isAfter(_dateOnly(promise.promisedDate)) &&
+      (preferredPromiseId == null || promise.id == preferredPromiseId));
+  if (eligible.isEmpty) return null;
+  return eligible.reduce((current, candidate) =>
+      candidate.promisedDate.isBefore(current.promisedDate)
+          ? candidate
+          : current);
+}

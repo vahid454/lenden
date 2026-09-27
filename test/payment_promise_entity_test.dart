@@ -34,7 +34,7 @@ void main() {
     expect(upcoming.isOverdue(now), isFalse);
   });
 
-  test('paid and partial promises preserve the correct remaining amount', () {
+  test('paid and partial promises are both closed for follow-up', () {
     final partial = promise(
       date: now,
       status: PaymentPromiseStatus.partialPaid,
@@ -46,7 +46,7 @@ void main() {
       fulfilled: 5000,
     );
 
-    expect(partial.isOpen, isTrue);
+    expect(partial.isOpen, isFalse);
     expect(partial.remainingAmount, 2000);
     expect(paid.isOpen, isFalse);
     expect(paid.remainingAmount, 0);

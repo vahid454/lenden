@@ -27,4 +27,6 @@ abstract class PaymentPromiseRepository {
   });
 
   Future<Either<Failure, void>> markMissed(PaymentPromiseEntity promise);
+
+  Future<Either<Failure, void>> cancel(PaymentPromiseEntity promise);
 }

@@ -3,7 +3,9 @@ import 'package:logger/logger.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/errors/exceptions.dart';
+import '../../domain/entities/payment_promise_entity.dart';
 import '../../domain/entities/transaction_entity.dart';
+import '../models/payment_promise_model.dart';
 import '../models/transaction_model.dart';
 
 class TransactionRemoteDataSource {
@@ -20,6 +22,8 @@ class TransactionRemoteDataSource {
       _db.collection(AppConstants.colTransactions);
   CollectionReference<Map<String, dynamic>> get _custCol =>
       _db.collection(AppConstants.colCustomers);
+  CollectionReference<Map<String, dynamic>> get _promiseCol =>
+      _db.collection(AppConstants.colPaymentPromises);
 
   // ── Watch ─────────────────────────────────────────────────────────────────
   Stream<List<TransactionModel>> watchTransactions({
@@ -41,19 +45,41 @@ class TransactionRemoteDataSource {
   }
 
   // ── Add (atomic) ──────────────────────────────────────────────────────────
-  Future<TransactionModel> addTransaction(TransactionModel tx) async {
+  Future<TransactionModel> addTransaction(
+    TransactionModel tx, {
+    String? promiseIdToFulfill,
+  }) async {
     try {
       late String newId;
+      final promiseRef = await _resolvePromiseForPayment(
+        tx,
+        preferredPromiseId: promiseIdToFulfill,
+      );
       await _db.runTransaction((ftx) async {
         final txRef = _txCol.doc();
         final custRef = _custCol.doc(tx.customerId);
         newId = txRef.id;
         await ftx.get(custRef);
+        final promiseSnapshot = promiseRef == null
+            ? null
+            : await ftx.get<Map<String, dynamic>>(promiseRef);
         ftx.set(txRef, tx.toFirestore());
         ftx.update(custRef, {
           'balance': FieldValue.increment(tx.balanceDelta),
           'updatedAt': FieldValue.serverTimestamp(),
         });
+        if (_canFulfillPromise(promiseSnapshot, tx)) {
+          final promiseData = promiseSnapshot!.data()!;
+          final promisedAmount = (promiseData['amount'] as num).toDouble();
+          final previouslyFulfilled =
+              (promiseData['fulfilledAmount'] as num?)?.toDouble() ?? 0;
+          ftx.update(promiseRef!, {
+            'fulfilledAmount':
+                (previouslyFulfilled + tx.amount).clamp(0, promisedAmount),
+            'status': PaymentPromiseStatus.paid.firestoreValue,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
       });
       _log.i('Transaction added: $newId');
       return tx.copyWith(id: newId);
@@ -61,6 +87,60 @@ class TransactionRemoteDataSource {
       _log.e('addTransaction: ${e.code}');
       throw AppException('Failed to add entry: ${e.message}', code: e.code);
     }
+  }
+
+  Future<DocumentReference<Map<String, dynamic>>?> _resolvePromiseForPayment(
+    TransactionModel tx, {
+    String? preferredPromiseId,
+  }) async {
+    if (!tx.isGot) return null;
+
+    try {
+      final snapshot =
+          await _promiseCol.where('userId', isEqualTo: tx.userId).get();
+      final promises = snapshot.docs
+          .map(PaymentPromiseModel.fromFirestore)
+          .toList(growable: false);
+      final selected = selectPromiseForPayment(
+        promises: promises,
+        customerId: tx.customerId,
+        paymentDate: tx.date,
+        preferredPromiseId: preferredPromiseId,
+      );
+      return selected == null ? null : _promiseCol.doc(selected.id);
+    } on FirebaseException catch (error) {
+      _log.w('Promise lookup skipped: ${error.code}');
+      return null;
+    }
+  }
+
+  bool _canFulfillPromise(
+    DocumentSnapshot<Map<String, dynamic>>? snapshot,
+    TransactionModel tx,
+  ) {
+    if (snapshot == null || !snapshot.exists || !tx.isGot) return false;
+    final data = snapshot.data();
+    if (data == null ||
+        data['userId'] != tx.userId ||
+        data['customerId'] != tx.customerId ||
+        data['status'] != PaymentPromiseStatus.pending.firestoreValue ||
+        data['amount'] is! num ||
+        data['createdAt'] is! Timestamp ||
+        data['promisedDate'] is! Timestamp) {
+      return false;
+    }
+    final promiseCreatedAt = (data['createdAt'] as Timestamp).toDate();
+    final promisedDate = (data['promisedDate'] as Timestamp).toDate();
+    final paymentDay = DateTime(tx.date.year, tx.date.month, tx.date.day);
+    final promiseCreatedDay = DateTime(
+      promiseCreatedAt.year,
+      promiseCreatedAt.month,
+      promiseCreatedAt.day,
+    );
+    final promisedDay =
+        DateTime(promisedDate.year, promisedDate.month, promisedDate.day);
+    return !paymentDay.isBefore(promiseCreatedDay) &&
+        !paymentDay.isAfter(promisedDay);
   }
 
   // ── Update (atomic) ───────────────────────────────────────────────────────

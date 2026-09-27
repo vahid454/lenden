@@ -55,4 +55,32 @@ void main() {
     expect(entries.single.promise?.id, 'earlier');
     expect(entries.single.collectionAmount, 2000);
   });
+
+  test('payment fulfils the earliest promise due on or after payment date', () {
+    final selected = selectPromiseForPayment(
+      promises: [
+        promise('later', '1', DateTime(2026, 10, 20)),
+        promise('earlier', '1', DateTime(2026, 10, 10)),
+        promise('other-customer', '2', DateTime(2026, 10, 1)),
+      ],
+      customerId: '1',
+      paymentDate: DateTime(2026, 10, 5),
+    );
+
+    expect(selected?.id, 'earlier');
+  });
+
+  test('payment dated before the promise was created does not fulfil it', () {
+    final selected = selectPromiseForPayment(
+      promises: [promise('future', '1', DateTime(2026, 10, 20))],
+      customerId: '1',
+      paymentDate: DateTime(2026, 9, 24),
+    );
+
+    expect(selected, isNull);
+  });
+
+  test('legacy partial promise is fulfilled and no longer open', () {
+    expect(PaymentPromiseStatus.partialPaid.isOpen, isFalse);
+  });
 }

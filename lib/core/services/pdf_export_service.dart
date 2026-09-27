@@ -95,24 +95,33 @@ class PdfExportService {
     required String businessName,
     required DateTime from,
     required DateTime to,
+    String? reportLabel,
   }) async {
     final doc = pw.Document(compress: true);
     final font = await PdfGoogleFonts.poppinsRegular();
     final bold = await PdfGoogleFonts.poppinsBold();
 
     doc.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(32),
+      pageFormat: PdfPageFormat.a4.landscape,
+      margin: const pw.EdgeInsets.all(28),
       build: (ctx) => [
         _buildHeader(font, bold, businessName, userName),
         pw.SizedBox(height: 16),
-        _buildReportPeriod(font, bold, from, to),
+        _buildReportPeriod(font, bold, from, to, label: reportLabel),
         pw.SizedBox(height: 16),
+        pw.Text('Current Customer Position',
+            style: pw.TextStyle(font: bold, fontSize: 12)),
+        pw.SizedBox(height: 7),
+        _buildCustomerPositionSummary(font, bold, customers),
+        pw.SizedBox(height: 16),
+        pw.Text('Transaction Activity',
+            style: pw.TextStyle(font: bold, fontSize: 12)),
+        pw.SizedBox(height: 7),
         _buildReportSummary(font, bold, transactions),
         pw.SizedBox(height: 20),
         _buildCustomerBreakdownTable(font, bold, customers),
         pw.SizedBox(height: 20),
-        _buildAllTransactionsTable(font, bold, transactions),
+        _buildAllTransactionsTable(font, bold, transactions, customers),
       ],
       footer: (ctx) => _buildFooter(font, ctx.pageNumber, ctx.pagesCount),
     ));
@@ -200,7 +209,7 @@ class PdfExportService {
                   _promiseCell(
                     font,
                     promise == null
-                        ? 'No promise'
+                        ? '-'
                         : DateFormat('dd MMM yyyy')
                             .format(promise.promisedDate),
                   ),
@@ -518,15 +527,21 @@ class PdfExportService {
   }
 
   pw.Widget _buildReportPeriod(
-      pw.Font font, pw.Font bold, DateTime from, DateTime to) {
+    pw.Font font,
+    pw.Font bold,
+    DateTime from,
+    DateTime to, {
+    String? label,
+  }) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(10),
       decoration: const pw.BoxDecoration(color: _lightGray),
       child: pw.Row(children: [
-        pw.Text('Report Period: ',
-            style: pw.TextStyle(font: bold, fontSize: 11)),
+        pw.Text('Report: ', style: pw.TextStyle(font: bold, fontSize: 11)),
         pw.Text(
-            '${AppFormatters.longDate(from)} → ${AppFormatters.longDate(to)}',
+            label == 'All Data'
+                ? 'All Data - complete customer and transaction history'
+                : '${label ?? 'Selected period'}  |  ${AppFormatters.longDate(from)} to ${AppFormatters.longDate(to)}',
             style: pw.TextStyle(font: font, fontSize: 11)),
       ]),
     );
@@ -640,6 +655,34 @@ class PdfExportService {
     return _buildSummaryRow(font, bold, txs);
   }
 
+  pw.Widget _buildCustomerPositionSummary(
+    pw.Font font,
+    pw.Font bold,
+    List<CustomerEntity> customers,
+  ) {
+    final toReceive = customers
+        .where((customer) => customer.balance > 0)
+        .fold<double>(0, (sum, customer) => sum + customer.balance);
+    final toPay = customers
+        .where((customer) => customer.balance < 0)
+        .fold<double>(0, (sum, customer) => sum + customer.absBalance);
+    final net = toReceive - toPay;
+    return pw.Row(children: [
+      _summaryBox(font, bold, 'To Receive', AppFormatters.rupee(toReceive),
+          _successGreen),
+      pw.SizedBox(width: 10),
+      _summaryBox(font, bold, 'To Pay', AppFormatters.rupee(toPay), _dangerRed),
+      pw.SizedBox(width: 10),
+      _summaryBox(
+        font,
+        bold,
+        net >= 0 ? 'Net Receivable' : 'Net Payable',
+        AppFormatters.rupee(net.abs()),
+        net >= 0 ? _successGreen : _dangerRed,
+      ),
+    ]);
+  }
+
   pw.Widget _buildCustomerBreakdownTable(
       pw.Font font, pw.Font bold, List<CustomerEntity> customers) {
     if (customers.isEmpty) return pw.SizedBox();
@@ -652,41 +695,61 @@ class PdfExportService {
         pw.SizedBox(height: 8),
         pw.Table(
           border: pw.TableBorder.all(color: _borderGray, width: 0.5),
-          columnWidths: {
-            0: const pw.FlexColumnWidth(3),
-            1: const pw.FlexColumnWidth(2),
-            2: const pw.FlexColumnWidth(2),
+          columnWidths: const {
+            0: pw.FlexColumnWidth(2.1),
+            1: pw.FlexColumnWidth(1.5),
+            2: pw.FlexColumnWidth(1.5),
+            3: pw.FlexColumnWidth(2.2),
+            4: pw.FlexColumnWidth(2.2),
+            5: pw.FlexColumnWidth(1.3),
+            6: pw.FlexColumnWidth(1.4),
           },
           children: [
             pw.TableRow(
               decoration: const pw.BoxDecoration(color: _lightGray),
-              children: ['CUSTOMER', 'PHONE', 'BALANCE']
+              children: [
+                'CUSTOMER',
+                'PRIMARY PHONE',
+                'SECONDARY PHONE',
+                'ADDRESS',
+                'NOTES',
+                'POSITION',
+                'BALANCE',
+              ]
                   .map((h) => pw.Padding(
                         padding: const pw.EdgeInsets.all(6),
                         child: pw.Text(h,
                             style: pw.TextStyle(
-                                font: bold, fontSize: 9, color: _textMuted)),
+                                font: bold, fontSize: 7.5, color: _textMuted)),
                       ))
                   .toList(),
             ),
-            ...customers.map((c) => pw.TableRow(children: [
-                  pw.Padding(
-                      padding: const pw.EdgeInsets.all(6),
-                      child: pw.Text(c.name,
-                          style: pw.TextStyle(font: font, fontSize: 9))),
-                  pw.Padding(
-                      padding: const pw.EdgeInsets.all(6),
-                      child: pw.Text(c.phone,
-                          style: pw.TextStyle(font: font, fontSize: 9))),
-                  pw.Padding(
-                      padding: const pw.EdgeInsets.all(6),
-                      child: pw.Text(AppFormatters.rupee(c.absBalance),
-                          style: pw.TextStyle(
-                              font: bold,
-                              fontSize: 9,
-                              color:
-                                  c.isCreditor ? _successGreen : _dangerRed))),
-                ])),
+            ...customers.map((customer) {
+              final position = customer.balance > 0
+                  ? 'To Receive'
+                  : customer.balance < 0
+                      ? 'To Pay'
+                      : 'Settled';
+              final color = customer.balance > 0
+                  ? _successGreen
+                  : customer.balance < 0
+                      ? _dangerRed
+                      : _textMuted;
+              return pw.TableRow(children: [
+                _reportCell(font, customer.name),
+                _reportCell(font, customer.phone),
+                _reportCell(font, customer.secondaryPhone ?? '-'),
+                _reportCell(font, customer.address ?? '-'),
+                _reportCell(font, customer.notes ?? '-'),
+                _reportCell(bold, position, color: color),
+                _reportCell(
+                  bold,
+                  AppFormatters.rupee(customer.absBalance),
+                  color: color,
+                  alignRight: true,
+                ),
+              ]);
+            }),
           ],
         ),
       ],
@@ -694,8 +757,15 @@ class PdfExportService {
   }
 
   pw.Widget _buildAllTransactionsTable(
-      pw.Font font, pw.Font bold, List<TransactionEntity> txs) {
+    pw.Font font,
+    pw.Font bold,
+    List<TransactionEntity> txs,
+    List<CustomerEntity> customers,
+  ) {
     if (txs.isEmpty) return pw.SizedBox();
+    final customersById = {
+      for (final customer in customers) customer.id: customer,
+    };
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -704,9 +774,65 @@ class PdfExportService {
         pw.Text('All Transactions',
             style: pw.TextStyle(font: bold, fontSize: 13)),
         pw.SizedBox(height: 8),
-        _buildTableHeader(bold),
-        _buildTableRows(font, font, txs),
+        pw.Table(
+          border: pw.TableBorder.all(color: _borderGray, width: 0.5),
+          columnWidths: const {
+            0: pw.FlexColumnWidth(1.4),
+            1: pw.FlexColumnWidth(2.2),
+            2: pw.FlexColumnWidth(3.2),
+            3: pw.FlexColumnWidth(1.4),
+            4: pw.FlexColumnWidth(1.5),
+          },
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: _lightGray),
+              children: ['DATE', 'CUSTOMER', 'NOTE', 'ENTRY', 'AMOUNT']
+                  .map((heading) =>
+                      _reportCell(bold, heading, color: _textMuted))
+                  .toList(),
+            ),
+            ...txs.map((transaction) {
+              final color = transaction.isGave ? _successGreen : _dangerRed;
+              return pw.TableRow(children: [
+                _reportCell(font, AppFormatters.shortDate(transaction.date)),
+                _reportCell(
+                  font,
+                  customersById[transaction.customerId]?.name ??
+                      'Unknown customer',
+                ),
+                _reportCell(font, transaction.note ?? '-'),
+                _reportCell(font, transaction.isGave ? 'You Gave' : 'You Got',
+                    color: color),
+                _reportCell(
+                  bold,
+                  AppFormatters.rupee(transaction.amount),
+                  color: color,
+                  alignRight: true,
+                ),
+              ]);
+            }),
+          ],
+        ),
       ],
+    );
+  }
+
+  pw.Widget _reportCell(
+    pw.Font font,
+    String text, {
+    PdfColor color = _textDark,
+    bool alignRight = false,
+  }) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      child: pw.Align(
+        alignment:
+            alignRight ? pw.Alignment.centerRight : pw.Alignment.centerLeft,
+        child: pw.Text(
+          text.isEmpty ? '-' : text,
+          style: pw.TextStyle(font: font, fontSize: 8, color: color),
+        ),
+      ),
     );
   }
 

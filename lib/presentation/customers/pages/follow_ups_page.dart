@@ -98,10 +98,11 @@ class _FollowUpsPageState extends ConsumerState<FollowUpsPage> {
                         promise: promise,
                         customer: customer,
                         onCall: () => _call(customer.phone),
-                        onWhatsApp: () => _remind(customer, promise),
+                        onWhatsApp: () => _remind(customer),
                         onContact: () => _contact(promise),
                         onPayment: () => _payment(customer, promise),
                         onMissed: () => _missed(promise),
+                        onCancel: () => _cancel(promise),
                         onReschedule: () => showPaymentPromiseSheet(
                           context,
                           customer: customer,
@@ -121,24 +122,13 @@ class _FollowUpsPageState extends ConsumerState<FollowUpsPage> {
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
-  Future<void> _remind(
-    CustomerEntity customer,
-    PaymentPromiseEntity promise,
-  ) async {
+  Future<void> _remind(CustomerEntity customer) async {
     final user = ref.read(currentUserProvider);
-    final business = user?.businessName?.trim() ?? '';
-    final owner = user?.name.trim() ?? '';
-    final sender = business.isNotEmpty
-        ? business
-        : owner.isNotEmpty
-            ? owner
-            : 'LenDen';
-    final message = PaymentReminderMessage.build(
+    final message = PaymentReminderMessage.buildBilingual(
       customerName: customer.name,
-      senderName: sender,
-      amount: promise.remainingAmount,
-      ownerOwes: false,
-      dueDate: promise.promisedDate,
+      ownerName: user?.name ?? '',
+      businessName: user?.businessName ?? '',
+      amount: customer.balance,
     );
     final uri = Uri.parse(
       'whatsapp://send?phone=91${customer.phone}&text=${Uri.encodeComponent(message)}',
@@ -179,18 +169,14 @@ class _FollowUpsPageState extends ConsumerState<FollowUpsPage> {
           initialAmount: promise.remainingAmount,
           initialNote:
               'Payment against promise for ${DateFormat('d MMM').format(promise.promisedDate)}',
+          promiseIdToFulfill: promise.id,
         ),
       ),
     );
     if (saved == null || saved.type != TransactionType.got) return;
-    final error = await ref.read(paymentPromiseActionsProvider).payment(
-          promise,
-          saved.amount,
-        );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(error ?? 'Payment promise updated.'),
-      backgroundColor: error == null ? null : AppColors.danger,
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Payment saved and promise fulfilled.'),
       behavior: SnackBarBehavior.floating,
     ));
   }
@@ -201,6 +187,36 @@ class _FollowUpsPageState extends ConsumerState<FollowUpsPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(error ?? 'Promise marked missed and kept in history.'),
+      backgroundColor: error == null ? null : AppColors.danger,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  Future<void> _cancel(PaymentPromiseEntity promise) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancel this promise?'),
+        content: const Text(
+          'It will stop appearing in follow-ups, but remain in promise history.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep promise'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Cancel promise'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final error = await ref.read(paymentPromiseActionsProvider).cancel(promise);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(error ?? 'Promise cancelled and kept in history.'),
       backgroundColor: error == null ? null : AppColors.danger,
       behavior: SnackBarBehavior.floating,
     ));
@@ -276,6 +292,7 @@ class _FollowUpTile extends StatelessWidget {
   final VoidCallback onPayment;
   final VoidCallback onMissed;
   final VoidCallback onReschedule;
+  final VoidCallback onCancel;
 
   const _FollowUpTile({
     required this.promise,
@@ -286,6 +303,7 @@ class _FollowUpTile extends StatelessWidget {
     required this.onPayment,
     required this.onMissed,
     required this.onReschedule,
+    required this.onCancel,
   });
 
   @override
@@ -386,10 +404,12 @@ class _FollowUpTile extends StatelessWidget {
                 onSelected: (value) {
                   if (value == 'missed') onMissed();
                   if (value == 'reschedule') onReschedule();
+                  if (value == 'cancel') onCancel();
                 },
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'reschedule', child: Text('Reschedule')),
                   PopupMenuItem(value: 'missed', child: Text('Mark missed')),
+                  PopupMenuItem(value: 'cancel', child: Text('Cancel promise')),
                 ],
                 icon: const Icon(Icons.more_horiz_rounded, size: 20),
               ),

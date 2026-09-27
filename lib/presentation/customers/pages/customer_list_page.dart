@@ -130,7 +130,9 @@ class CustomerListPage extends ConsumerWidget {
     final sharedPending = promiseFilter == PaymentPromiseFilter.all &&
         sharedCustomersAsync.isLoading &&
         sharedCustomersAsync.valueOrNull == null;
-    final promisesPending = promiseFilter != PaymentPromiseFilter.all &&
+    final promisesPending =
+        promiseFilter != PaymentPromiseFilter.all &&
+            promiseFilter != PaymentPromiseFilter.defaulters &&
         promisesAsync.isLoading &&
         promisesAsync.valueOrNull == null;
     if (customersPending || sharedPending || promisesPending) {
@@ -140,7 +142,9 @@ class CustomerListPage extends ConsumerWidget {
     final error = customersAsync.asError?.error ??
         (promiseFilter == PaymentPromiseFilter.all
             ? sharedCustomersAsync.asError?.error
-            : promisesAsync.asError?.error);
+            : promiseFilter == PaymentPromiseFilter.defaulters
+                ? null
+                : promisesAsync.asError?.error);
     if (error != null) {
       return _buildErrorState(context, error.toString());
     }
@@ -443,6 +447,7 @@ class _PromiseFilterBar extends ConsumerWidget {
       PaymentPromiseFilter.noPromiseDate,
       PaymentPromiseFilter.partialPaid,
       PaymentPromiseFilter.paid,
+      PaymentPromiseFilter.defaulters,
     ];
     return SizedBox(
       height: 42,

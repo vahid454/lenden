@@ -30,6 +30,9 @@ service cloud.firestore {
           'updatedAt',
           'nameLower',
           'namePrefix',
+          'isDefaulter',
+          'defaulterNote',
+          'defaulterMarkedAt',
         ])
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.name is string
@@ -45,6 +48,12 @@ service cloud.firestore {
         && isOptionalString('photoPath')
         && isOptionalString('ownerName')
         && isOptionalString('ownerPhone')
+        && (!('isDefaulter' in request.resource.data)
+            || request.resource.data.isDefaulter is bool)
+        && isOptionalString('defaulterNote')
+        && (!('defaulterNote' in request.resource.data)
+            || request.resource.data.defaulterNote.size() <= 500)
+        && isOptionalTimestamp('defaulterMarkedAt')
         && request.resource.data.balance is number;
     }
     function hasValidTransactionFields() {
@@ -113,7 +122,7 @@ service cloud.firestore {
         && request.resource.data.fulfilledAmount >= 0
         && request.resource.data.fulfilledAmount <= request.resource.data.amount
         && request.resource.data.promisedDate is timestamp
-        && request.resource.data.status in ['pending', 'partialPaid', 'paid', 'missed', 'rescheduled']
+        && request.resource.data.status in ['pending', 'partialPaid', 'paid', 'missed', 'rescheduled', 'cancelled']
         && isOptionalString('note')
         && isOptionalString('followUpNote')
         && isOptionalTimestamp('lastContactedAt')
@@ -141,8 +150,9 @@ service cloud.firestore {
               && request.resource.data.fulfilledAmount > 0
               && request.resource.data.fulfilledAmount < request.resource.data.amount)
           || (request.resource.data.status == 'paid'
-              && request.resource.data.fulfilledAmount == request.resource.data.amount)
-          || request.resource.data.status in ['missed', 'rescheduled'];
+              && request.resource.data.fulfilledAmount > 0
+              && request.resource.data.fulfilledAmount <= request.resource.data.amount)
+          || request.resource.data.status in ['missed', 'rescheduled', 'cancelled'];
     }
 
     // ── Users ─────────────────────────────────────────────────────────────
@@ -233,6 +243,10 @@ service cloud.firestore {
                     && request.resource.data.amount == resource.data.amount
                     && request.resource.data.promisedDate == resource.data.promisedDate
                     && request.resource.data.createdAt == resource.data.createdAt
+                    && (request.resource.data.status != 'cancelled'
+                        || resource.data.status == 'pending')
+                    && (resource.data.status != 'cancelled'
+                        || request.resource.data.status == 'cancelled')
                     && hasValidPaymentPromiseFields()
                     && hasConsistentPaymentPromiseStatus();
       allow delete: if false;

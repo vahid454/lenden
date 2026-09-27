@@ -15,7 +15,9 @@ abstract class TransactionRepository {
   /// Adds a new transaction AND atomically updates the customer balance.
   /// Returns the saved entity with a Firestore-generated ID.
   Future<Either<Failure, TransactionEntity>> addTransaction(
-      TransactionEntity transaction);
+    TransactionEntity transaction, {
+    String? promiseIdToFulfill,
+  });
 
   /// Updates a transaction AND recalculates the customer balance delta.
   /// [oldTransaction] is needed to reverse its previous balance effect.

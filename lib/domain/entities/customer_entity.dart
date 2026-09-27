@@ -20,6 +20,11 @@ class CustomerEntity extends Equatable {
   /// The phone of the person who created this customer record.
   final String? ownerPhone;
 
+  /// Owner-private collection risk marker and note.
+  final bool isDefaulter;
+  final String? defaulterNote;
+  final DateTime? defaulterMarkedAt;
+
   const CustomerEntity({
     required this.id,
     required this.userId,
@@ -34,6 +39,9 @@ class CustomerEntity extends Equatable {
     this.balance = 0.0,
     this.ownerName,
     this.ownerPhone,
+    this.isDefaulter = false,
+    this.defaulterNote,
+    this.defaulterMarkedAt,
   });
 
   bool get isCreditor => balance > 0;
@@ -63,10 +71,15 @@ class CustomerEntity extends Equatable {
     double? balance,
     String? ownerName,
     String? ownerPhone,
+    bool? isDefaulter,
+    String? defaulterNote,
+    DateTime? defaulterMarkedAt,
     bool clearSecondaryPhone = false,
     bool clearAddress = false,
     bool clearNotes = false,
     bool clearPhotoPath = false,
+    bool clearDefaulterNote = false,
+    bool clearDefaulterMarkedAt = false,
   }) {
     return CustomerEntity(
       id: id ?? this.id,
@@ -83,6 +96,12 @@ class CustomerEntity extends Equatable {
       balance: balance ?? this.balance,
       ownerName: ownerName ?? this.ownerName,
       ownerPhone: ownerPhone ?? this.ownerPhone,
+      isDefaulter: isDefaulter ?? this.isDefaulter,
+      defaulterNote:
+          clearDefaulterNote ? null : defaulterNote ?? this.defaulterNote,
+      defaulterMarkedAt: clearDefaulterMarkedAt
+          ? null
+          : defaulterMarkedAt ?? this.defaulterMarkedAt,
     );
   }
 
@@ -101,5 +120,8 @@ class CustomerEntity extends Equatable {
         balance,
         ownerName,
         ownerPhone,
+        isDefaulter,
+        defaulterNote,
+        defaulterMarkedAt,
       ];
 }

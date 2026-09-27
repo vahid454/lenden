@@ -42,10 +42,15 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
   @override
   Future<Either<Failure, TransactionEntity>> addTransaction(
-      TransactionEntity transaction) async {
+    TransactionEntity transaction, {
+    String? promiseIdToFulfill,
+  }) async {
     try {
       final model = TransactionModel.fromEntity(transaction);
-      final result = await _remote.addTransaction(model);
+      final result = await _remote.addTransaction(
+        model,
+        promiseIdToFulfill: promiseIdToFulfill,
+      );
       return Right(result);
     } on AppException catch (e) {
       _log.e('addTransaction: ${e.message}');

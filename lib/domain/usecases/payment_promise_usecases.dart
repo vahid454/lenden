@@ -58,3 +58,10 @@ class MarkPaymentPromiseMissedUseCase {
   Future<Either<Failure, void>> call(PaymentPromiseEntity promise) =>
       _repository.markMissed(promise);
 }
+
+class CancelPaymentPromiseUseCase {
+  final PaymentPromiseRepository _repository;
+  const CancelPaymentPromiseUseCase(this._repository);
+  Future<Either<Failure, void>> call(PaymentPromiseEntity promise) =>
+      _repository.cancel(promise);
+}

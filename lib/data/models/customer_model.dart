@@ -16,6 +16,9 @@ class CustomerModel extends CustomerEntity {
     super.balance,
     super.ownerName,
     super.ownerPhone,
+    super.isDefaulter,
+    super.defaulterNote,
+    super.defaulterMarkedAt,
   });
 
   factory CustomerModel.fromFirestore(
@@ -36,6 +39,9 @@ class CustomerModel extends CustomerEntity {
       // Owner info for shared ledger display
       ownerName: d['ownerName'] as String?,
       ownerPhone: d['ownerPhone'] as String?,
+      isDefaulter: d['isDefaulter'] as bool? ?? false,
+      defaulterNote: d['defaulterNote'] as String?,
+      defaulterMarkedAt: (d['defaulterMarkedAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -53,6 +59,11 @@ class CustomerModel extends CustomerEntity {
       if (ownerPhone != null && ownerPhone!.isNotEmpty)
         'ownerPhone': ownerPhone,
       'balance': balance,
+      'isDefaulter': isDefaulter,
+      if (defaulterNote != null && defaulterNote!.isNotEmpty)
+        'defaulterNote': defaulterNote,
+      if (defaulterMarkedAt != null)
+        'defaulterMarkedAt': Timestamp.fromDate(defaulterMarkedAt!),
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': FieldValue.serverTimestamp(),
       'nameLower': name.toLowerCase(),
@@ -77,6 +88,9 @@ class CustomerModel extends CustomerEntity {
       balance: e.balance,
       ownerName: e.ownerName,
       ownerPhone: e.ownerPhone,
+      isDefaulter: e.isDefaulter,
+      defaulterNote: e.defaulterNote,
+      defaulterMarkedAt: e.defaulterMarkedAt,
     );
   }
 
@@ -95,10 +109,15 @@ class CustomerModel extends CustomerEntity {
     double? balance,
     String? ownerName,
     String? ownerPhone,
+    bool? isDefaulter,
+    String? defaulterNote,
+    DateTime? defaulterMarkedAt,
     bool clearSecondaryPhone = false,
     bool clearAddress = false,
     bool clearNotes = false,
     bool clearPhotoPath = false,
+    bool clearDefaulterNote = false,
+    bool clearDefaulterMarkedAt = false,
   }) {
     return CustomerModel(
       id: id ?? this.id,
@@ -115,6 +134,12 @@ class CustomerModel extends CustomerEntity {
       balance: balance ?? this.balance,
       ownerName: ownerName ?? this.ownerName,
       ownerPhone: ownerPhone ?? this.ownerPhone,
+      isDefaulter: isDefaulter ?? this.isDefaulter,
+      defaulterNote:
+          clearDefaulterNote ? null : defaulterNote ?? this.defaulterNote,
+      defaulterMarkedAt: clearDefaulterMarkedAt
+          ? null
+          : defaulterMarkedAt ?? this.defaulterMarkedAt,
     );
   }
 }

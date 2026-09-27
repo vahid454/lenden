@@ -13,6 +13,7 @@ import '../../../core/utils/app_formatters.dart';
 import '../../../domain/entities/collection_report_entry.dart';
 import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/payment_promise_entity.dart';
+import '../../../domain/entities/transaction_entity.dart';
 
 enum _CollectionPeriod {
   allDue,
@@ -74,19 +75,35 @@ class _CollectionReportPageState extends ConsumerState<CollectionReportPage> {
   bool _outstandingOnly = true;
   DateTimeRange? _customRange;
   bool _exporting = false;
+  bool _reconcilingPromises = false;
+  String? _reconciledPromiseKey;
 
   @override
   Widget build(BuildContext context) {
     final promiseState = ref.watch(paymentPromisesStreamProvider);
     final customerState = ref.watch(customersStreamProvider);
+    final paymentHistoryState = ref.watch(promisePaymentHistoryProvider);
     final customers = {
       for (final customer
           in customerState.valueOrNull ?? const <CustomerEntity>[])
         customer.id: customer,
     };
+    final promises = promiseState.valueOrNull ?? const <PaymentPromiseEntity>[];
+    final paymentHistory =
+        paymentHistoryState.valueOrNull ?? const <TransactionEntity>[];
+    final fulfilledPromiseIds =
+        promiseIdsFulfilledByPayments(promises, paymentHistory);
+    if (!paymentHistoryState.isLoading && !paymentHistoryState.hasError) {
+      _schedulePromiseReconciliation(
+        promises,
+        paymentHistory,
+        fulfilledPromiseIds,
+      );
+    }
     final filtered = _filter(
-      promiseState.valueOrNull ?? const <PaymentPromiseEntity>[],
+      promises,
       customers,
+      fulfilledPromiseIds,
     );
     final total = filtered.fold<double>(
       0,
@@ -101,7 +118,9 @@ class _CollectionReportPageState extends ConsumerState<CollectionReportPage> {
         actions: [
           IconButton(
             tooltip: 'Export filtered PDF',
-            onPressed: _exporting ? null : () => _export(filtered),
+            onPressed: _exporting || paymentHistoryState.hasError
+                ? null
+                : () => _export(filtered),
             icon: _exporting
                 ? const SizedBox.square(
                     dimension: 20,
@@ -112,30 +131,104 @@ class _CollectionReportPageState extends ConsumerState<CollectionReportPage> {
           const SizedBox(width: 6),
         ],
       ),
-      body: ((_period != _CollectionPeriod.allDue &&
-                  promiseState.isLoading &&
-                  promiseState.valueOrNull == null) ||
-              (customerState.isLoading && customerState.valueOrNull == null))
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                _filters(),
-                _summary(filtered.length, total),
-                Expanded(
-                  child: filtered.isEmpty
-                      ? const _EmptyCollectionReport()
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 32),
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (_, index) {
-                            return _CollectionReportRow(entry: filtered[index]);
-                          },
-                        ),
+      body: paymentHistoryState.hasError
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.sync_problem_outlined, size: 30),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Payment history could not be checked. Refresh to avoid showing a fulfilled promise.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: () =>
+                          ref.invalidate(promisePaymentHistoryProvider),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Refresh'),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            )
+          : ((promiseState.isLoading && promiseState.valueOrNull == null) ||
+                  (customerState.isLoading &&
+                      customerState.valueOrNull == null) ||
+                  (paymentHistoryState.isLoading &&
+                      paymentHistoryState.valueOrNull == null))
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    _filters(),
+                    _summary(filtered.length, total),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? const _EmptyCollectionReport()
+                          : ListView.separated(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 10, 16, 32),
+                              itemCount: filtered.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (_, index) {
+                                return _CollectionReportRow(
+                                    entry: filtered[index]);
+                              },
+                            ),
+                    ),
+                  ],
+                ),
     );
+  }
+
+  void _schedulePromiseReconciliation(
+    List<PaymentPromiseEntity> promises,
+    List<TransactionEntity> transactions,
+    Set<String> fulfilledPromiseIds,
+  ) {
+    final pending = promises
+        .where((promise) =>
+            promise.isOpen && fulfilledPromiseIds.contains(promise.id))
+        .toList();
+    final key =
+        (pending.map((promise) => promise.id).toList()..sort()).join('|');
+    if (_reconcilingPromises || key.isEmpty || key == _reconciledPromiseKey) {
+      return;
+    }
+    _reconciledPromiseKey = key;
+    _reconcilingPromises = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (!mounted) return;
+        final actions = ref.read(paymentPromiseActionsProvider);
+        for (final promise in pending) {
+          final error =
+              await actions.reconcilePaymentHistory(promise, transactions);
+          if (error != null && mounted) {
+            _reconciledPromiseKey = key;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Could not update a fulfilled promise: $error'),
+              behavior: SnackBarBehavior.floating,
+              action: SnackBarAction(
+                label: 'Retry',
+                onPressed: () {
+                  _reconciledPromiseKey = null;
+                  ref.invalidate(promisePaymentHistoryProvider);
+                },
+              ),
+            ));
+            return;
+          }
+        }
+      } finally {
+        _reconcilingPromises = false;
+      }
+    });
   }
 
   Widget _filters() {
@@ -241,14 +334,24 @@ class _CollectionReportPageState extends ConsumerState<CollectionReportPage> {
         children: [
           const Icon(Icons.groups_outlined, size: 18),
           const SizedBox(width: 8),
-          Text('$count ${count == 1 ? 'customer' : 'customers'}',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-          const Spacer(),
-          Text(
-            AppFormatters.rupee(amount),
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w700,
-              color: AppColors.success,
+          Expanded(
+            child: Text('$count ${count == 1 ? 'customer' : 'customers'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                AppFormatters.rupee(amount),
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.success,
+                ),
+              ),
             ),
           ),
         ],
@@ -279,6 +382,7 @@ class _CollectionReportPageState extends ConsumerState<CollectionReportPage> {
   List<CollectionReportEntry> _filter(
     List<PaymentPromiseEntity> promises,
     Map<String, CustomerEntity> customers,
+    Set<String> fulfilledPromiseIds,
   ) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -286,8 +390,11 @@ class _CollectionReportPageState extends ConsumerState<CollectionReportPage> {
         .subtract(const Duration(microseconds: 1));
 
     if (_period == _CollectionPeriod.allDue) {
-      final result =
-          buildOutstandingCollectionEntries(customers.values, promises);
+      final result = buildOutstandingCollectionEntries(
+        customers.values,
+        promises,
+        fulfilledPromiseIds: fulfilledPromiseIds,
+      );
       _sortEntries(result);
       return result;
     }
@@ -306,9 +413,13 @@ class _CollectionReportPageState extends ConsumerState<CollectionReportPage> {
             _PromiseState.paid => promise.status == PaymentPromiseStatus.paid,
             _PromiseState.missed =>
               promise.status == PaymentPromiseStatus.missed,
-            _PromiseState.all => true,
+            _PromiseState.all =>
+              promise.status != PaymentPromiseStatus.cancelled,
           };
           if (!statusMatches) return false;
+          if (fulfilledPromiseIds.contains(promise.id)) {
+            return false;
+          }
 
           final due = DateTime(
             promise.promisedDate.year,
@@ -427,11 +538,15 @@ class _CollectionReportRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
                 Text(customer.phone,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 if (customer.secondaryPhone?.isNotEmpty == true)
                   Text('Alt ${customer.secondaryPhone}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
                           fontSize: 11,
                           color:
@@ -440,17 +555,28 @@ class _CollectionReportRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(AppFormatters.rupee(entry.collectionAmount),
-                  style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w700, color: AppColors.success)),
-              Text(entry.statusLabel,
-                  style: GoogleFonts.poppins(
-                      fontSize: 10,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            ],
+          SizedBox(
+            width: 112,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(AppFormatters.rupee(entry.collectionAmount),
+                      maxLines: 1,
+                      style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.success)),
+                ),
+                Text(entry.statusLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              ],
+            ),
           ),
         ],
       ),

@@ -13,6 +13,7 @@ import '../../../core/providers/customer_providers.dart';
 import '../../../core/services/pdf_export_service.dart';
 import '../../../core/services/share_service.dart';
 import '../../../core/utils/app_formatters.dart';
+import '../../../domain/entities/customer_entity.dart';
 import '../../../domain/entities/transaction_entity.dart';
 import '../providers/reports_provider.dart';
 import 'collection_report_page.dart';
@@ -23,6 +24,8 @@ class ReportsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(reportsProvider);
+    final customers = ref.watch(customersStreamProvider).valueOrNull ??
+        const <CustomerEntity>[];
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -63,9 +66,7 @@ class ReportsPage extends ConsumerWidget {
       ),
       body: state.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : state.transactions.isEmpty
-              ? _EmptyState()
-              : _ReportBody(state: state),
+          : _ReportBody(state: state, customers: customers),
     );
   }
 
@@ -87,6 +88,7 @@ class ReportsPage extends ConsumerWidget {
         businessName: user.businessName ?? '',
         from: state.dateRange.from,
         to: state.dateRange.to,
+        reportLabel: state.period.label,
       );
       snack.hideCurrentSnackBar();
       if (ctx.mounted) await ShareService.sharePdf(file, 'Report');
@@ -163,36 +165,143 @@ class _PeriodChips extends ConsumerWidget {
 
 class _ReportBody extends StatelessWidget {
   final ReportsState state;
-  const _ReportBody({required this.state});
+  final List<CustomerEntity> customers;
+  const _ReportBody({required this.state, required this.customers});
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // 1. Summary hero
-        _SummaryHero(state: state).animate().fadeIn(delay: 40.ms),
-        const SizedBox(height: 12),
-
-        // 2. Gave / Got cards
-        _GaveGotRow(state: state).animate().fadeIn(delay: 80.ms),
-        const SizedBox(height: 20),
-
-        // 3. Bar chart (only if >1 month of data)
-        if (state.monthlyBreakdown.length > 1) ...[
-          const _Label('Monthly Breakdown'),
-          const SizedBox(height: 10),
-          _BarChartCard(state: state).animate().fadeIn(delay: 120.ms),
-          const SizedBox(height: 20),
-        ],
-
-        // 4. Transaction list grouped by date
-        const _Label('All Transactions'),
+        const _Label('Current Customer Position'),
         const SizedBox(height: 10),
-        _GroupedTxList(state: state).animate().fadeIn(delay: 160.ms),
+        _CustomerPositionRow(customers: customers)
+            .animate()
+            .fadeIn(delay: 20.ms),
+        const SizedBox(height: 20),
+        if (state.transactions.isEmpty) ...[
+          _EmptyState(),
+          const SizedBox(height: 32),
+        ] else ...[
+          // 1. Summary hero
+          _SummaryHero(state: state).animate().fadeIn(delay: 40.ms),
+          const SizedBox(height: 12),
 
-        const SizedBox(height: 32),
+          // 2. Gave / Got cards
+          _GaveGotRow(state: state).animate().fadeIn(delay: 80.ms),
+          const SizedBox(height: 20),
+
+          // 3. Bar chart (only if >1 month of data)
+          if (state.monthlyBreakdown.length > 1) ...[
+            const _Label('Monthly Breakdown'),
+            const SizedBox(height: 10),
+            _BarChartCard(state: state).animate().fadeIn(delay: 120.ms),
+            const SizedBox(height: 20),
+          ],
+
+          // 4. Transaction list grouped by date
+          const _Label('All Transactions'),
+          const SizedBox(height: 10),
+          _GroupedTxList(state: state).animate().fadeIn(delay: 160.ms),
+
+          const SizedBox(height: 32),
+        ],
       ],
+    );
+  }
+}
+
+class _CustomerPositionRow extends StatelessWidget {
+  final List<CustomerEntity> customers;
+  const _CustomerPositionRow({required this.customers});
+
+  @override
+  Widget build(BuildContext context) {
+    final toReceive = customers
+        .where((customer) => customer.balance > 0)
+        .fold<double>(0, (sum, customer) => sum + customer.balance);
+    final toPay = customers
+        .where((customer) => customer.balance < 0)
+        .fold<double>(0, (sum, customer) => sum + customer.absBalance);
+    final receivingCount =
+        customers.where((customer) => customer.balance > 0).length;
+    final payingCount =
+        customers.where((customer) => customer.balance < 0).length;
+
+    return Row(children: [
+      Expanded(
+        child: _PositionCard(
+          label: 'To Receive',
+          amount: toReceive,
+          count: receivingCount,
+          icon: Icons.south_west_rounded,
+          color: AppColors.success,
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: _PositionCard(
+          label: 'To Pay',
+          amount: toPay,
+          count: payingCount,
+          icon: Icons.north_east_rounded,
+          color: AppColors.danger,
+        ),
+      ),
+    ]);
+  }
+}
+
+class _PositionCard extends StatelessWidget {
+  final String label;
+  final double amount;
+  final int count;
+  final IconData icon;
+  final Color color;
+
+  const _PositionCard({
+    required this.label,
+    required this.amount,
+    required this.count,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.poppins(
+                    fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(AppFormatters.rupee(amount),
+              style: GoogleFonts.poppins(
+                  fontSize: 20, fontWeight: FontWeight.w800)),
+        ),
+        const SizedBox(height: 3),
+        Text('$count ${count == 1 ? 'customer' : 'customers'}',
+            style: GoogleFonts.poppins(
+                fontSize: 11, color: cs.onSurface.withValues(alpha: 0.55))),
+      ]),
     );
   }
 }

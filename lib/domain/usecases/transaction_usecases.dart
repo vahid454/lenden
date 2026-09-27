@@ -26,8 +26,13 @@ class AddTransactionUseCase {
   const AddTransactionUseCase(this._repo);
 
   Future<Either<Failure, TransactionEntity>> call(
-          TransactionEntity transaction) =>
-      _repo.addTransaction(transaction);
+    TransactionEntity transaction, {
+    String? promiseIdToFulfill,
+  }) =>
+      _repo.addTransaction(
+        transaction,
+        promiseIdToFulfill: promiseIdToFulfill,
+      );
 }
 
 /// Updates a transaction — reverses old balance delta, applies new one.

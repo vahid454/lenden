@@ -53,6 +53,7 @@ class TransactionFormNotifier extends StateNotifier<TransactionFormState> {
     required TransactionType type,
     required DateTime date,
     String? note,
+    String? promiseIdToFulfill,
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
 
@@ -74,7 +75,10 @@ class TransactionFormNotifier extends StateNotifier<TransactionFormState> {
     );
 
     final useCase = _ref.read(addTransactionUseCaseProvider);
-    final result = await useCase(tx);
+    final result = await useCase(
+      tx,
+      promiseIdToFulfill: promiseIdToFulfill,
+    );
 
     return result.fold(
       (f) {

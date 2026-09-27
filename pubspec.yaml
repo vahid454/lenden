@@ -1,7 +1,7 @@
 name: lenden
 description: LenDen - Personal & Business Credit Tracker for India
 publish_to: 'none'
-version: 1.0.4+8
+version: 1.0.5+9
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

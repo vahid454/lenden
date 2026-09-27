@@ -65,14 +65,10 @@ class PaymentPromiseRemoteDataSource {
     required double paymentAmount,
   }) async {
     try {
-      final fulfilled = (promise.fulfilledAmount + paymentAmount)
-          .clamp(0, promise.amount)
-          .toDouble();
+      if (paymentAmount <= 0) return;
       await _collection.doc(promise.id).update({
-        'fulfilledAmount': fulfilled,
-        'status': fulfilled >= promise.amount
-            ? PaymentPromiseStatus.paid.firestoreValue
-            : PaymentPromiseStatus.partialPaid.firestoreValue,
+        'fulfilledAmount': paymentAmount.clamp(0, promise.amount),
+        'status': PaymentPromiseStatus.paid.firestoreValue,
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } on FirebaseException catch (error) {
@@ -114,6 +110,24 @@ class PaymentPromiseRemoteDataSource {
       });
     } on FirebaseException catch (error) {
       throw AppException('Could not mark promise missed: ${error.message}',
+          code: error.code);
+    }
+  }
+
+  Future<void> cancel(PaymentPromiseEntity promise) async {
+    if (!promise.isOpen) {
+      throw const AppException(
+        'Only an active promise can be cancelled.',
+        code: 'promise-not-open',
+      );
+    }
+    try {
+      await _collection.doc(promise.id).update({
+        'status': PaymentPromiseStatus.cancelled.firestoreValue,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (error) {
+      throw AppException('Could not cancel promise: ${error.message}',
           code: error.code);
     }
   }

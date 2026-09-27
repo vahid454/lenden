@@ -126,6 +126,20 @@ class CustomerCard extends StatelessWidget {
                           style: GoogleFonts.poppins(
                               fontSize: 12,
                               color: cs.onSurface.withOpacity(0.5))),
+                      if (customer.isDefaulter) ...[
+                        const SizedBox(height: 4),
+                        Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(Icons.flag_rounded,
+                              size: 12, color: AppColors.danger),
+                          const SizedBox(width: 3),
+                          Text('Defaulter',
+                              style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                color: AppColors.danger,
+                                fontWeight: FontWeight.w600,
+                              )),
+                        ]),
+                      ],
                       if (customer.secondaryPhone != null &&
                           customer.secondaryPhone!.isNotEmpty)
                         Padding(

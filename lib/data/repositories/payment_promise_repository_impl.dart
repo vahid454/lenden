@@ -83,6 +83,10 @@ class PaymentPromiseRepositoryImpl implements PaymentPromiseRepository {
   Future<Either<Failure, void>> markMissed(PaymentPromiseEntity promise) =>
       _run(() => _remote.markMissed(promise));
 
+  @override
+  Future<Either<Failure, void>> cancel(PaymentPromiseEntity promise) =>
+      _run(() => _remote.cancel(promise));
+
   Future<Either<Failure, void>> _run(Future<void> Function() operation) async {
     try {
       await operation();

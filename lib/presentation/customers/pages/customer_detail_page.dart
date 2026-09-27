@@ -123,6 +123,9 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
           onContact: isSharedLedger
               ? null
               : (promise) => _recordContact(context, promise),
+          onCancelPromise: isSharedLedger
+              ? null
+              : (promise) => _cancelPromise(context, promise),
           onRetry: () =>
               ref.invalidate(transactionsStreamProvider(ledgerCustomer.id)),
         ),
@@ -197,6 +200,100 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
     }
   }
 
+  Future<void> _cancelPromise(
+    BuildContext context,
+    PaymentPromiseEntity promise,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancel this promise?'),
+        content: const Text(
+          'It will stop appearing in follow-ups, but remain in promise history.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep promise'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Cancel promise'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final error = await ref.read(paymentPromiseActionsProvider).cancel(promise);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(error ?? 'Promise cancelled and kept in history.'),
+      backgroundColor: error == null ? null : AppColors.danger,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  Future<void> _editDefaulterStatus(
+    BuildContext context,
+    CustomerEntity customer,
+  ) async {
+    final noteController = TextEditingController(text: customer.defaulterNote);
+    final isMarking = !customer.isDefaulter;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+            isMarking ? 'Add to defaulter list?' : 'Remove defaulter flag?'),
+        content: isMarking
+            ? TextField(
+                controller: noteController,
+                maxLength: 500,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Private note (optional)',
+                  hintText: 'Only visible in your account',
+                ),
+              )
+            : const Text(
+                'This customer will be removed from your defaulter list.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Back'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(isMarking ? 'Add to list' : 'Remove flag'),
+          ),
+        ],
+      ),
+    );
+    final note = noteController.text;
+    noteController.dispose();
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ref.read(customerRemoteDataSourceProvider).setDefaulterStatus(
+            customerId: customer.id,
+            isDefaulter: isMarking,
+            note: isMarking ? note : null,
+          );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(isMarking
+            ? 'Customer added to your defaulter list.'
+            : 'Customer removed from your defaulter list.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error.toString()),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
   Widget _buildSliverAppBar(
     BuildContext context,
     CustomerEntity customer,
@@ -214,6 +311,16 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
       ),
       actions: [
         if (!isSharedLedger) ...[
+          IconButton(
+            icon: Icon(
+              customer.isDefaulter ? Icons.flag_rounded : Icons.outlined_flag,
+              color: customer.isDefaulter ? AppColors.danger : null,
+            ),
+            tooltip: customer.isDefaulter
+                ? 'Remove defaulter flag'
+                : 'Add to defaulter list',
+            onPressed: () => _editDefaulterStatus(context, customer),
+          ),
           IconButton(
             icon: const Icon(Icons.edit_outlined),
             tooltip: 'Edit Customer',
@@ -233,10 +340,10 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
         background: _HeaderContent(
           customer: customer,
           isSharedLedger: isSharedLedger,
-          nextPromise: ref.read(nextOpenPromiseByCustomerProvider)[customer.id],
           onSetPromise:
               isSharedLedger ? null : () => _setPromise(context, customer),
-          senderName: _senderName,
+          ownerName: _ownerName,
+          businessName: _businessName,
           onSharePdf:
               isSharedLedger ? null : () => _exportPdf(context, customer),
         ),
@@ -244,13 +351,10 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
     );
   }
 
-  String get _senderName {
-    final user = ref.read(currentUserProvider);
-    final business = user?.businessName?.trim() ?? '';
-    if (business.isNotEmpty) return business;
-    final owner = user?.name.trim() ?? '';
-    return owner.isNotEmpty ? owner : 'LenDen';
-  }
+  String get _ownerName => ref.read(currentUserProvider)?.name.trim() ?? '';
+
+  String get _businessName =>
+      ref.read(currentUserProvider)?.businessName?.trim() ?? '';
 
   Widget _buildAddEntryButton(
     BuildContext context,
@@ -273,6 +377,7 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
     TransactionType? initialType,
     double? initialAmount,
     String? initialNote,
+    String? promiseIdToFulfill,
   }) async {
     final savedTransaction =
         await Navigator.of(context).push<TransactionEntity>(
@@ -284,6 +389,7 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
           initialType: initialType,
           initialAmount: initialAmount,
           initialNote: initialNote,
+          promiseIdToFulfill: promiseIdToFulfill,
         ),
         transitionsBuilder: (_, anim, __, child) => SlideTransition(
           position: Tween(begin: const Offset(0, 1), end: Offset.zero)
@@ -359,16 +465,12 @@ class _CustomerDetailPageState extends ConsumerState<CustomerDetailPage> {
       initialAmount: promise.remainingAmount,
       initialNote:
           'Payment against promise for ${DateFormat('d MMM').format(promise.promisedDate)}',
+      promiseIdToFulfill: promise.id,
     );
     if (saved == null || saved.type != TransactionType.got) return;
-    final error = await ref.read(paymentPromiseActionsProvider).payment(
-          promise,
-          saved.amount,
-        );
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(error ?? 'Payment promise updated.'),
-      backgroundColor: error == null ? null : AppColors.danger,
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Payment saved and promise fulfilled.'),
       behavior: SnackBarBehavior.floating,
     ));
   }
@@ -378,17 +480,17 @@ class _HeaderContent extends StatelessWidget {
   final CustomerEntity customer;
   final bool isSharedLedger;
   final Future<void> Function()? onSharePdf;
-  final PaymentPromiseEntity? nextPromise;
   final VoidCallback? onSetPromise;
-  final String senderName;
+  final String ownerName;
+  final String businessName;
 
   const _HeaderContent({
     required this.customer,
     required this.isSharedLedger,
     required this.onSharePdf,
-    required this.nextPromise,
     required this.onSetPromise,
-    required this.senderName,
+    required this.ownerName,
+    required this.businessName,
   });
 
   @override
@@ -486,9 +588,9 @@ class _HeaderContent extends StatelessWidget {
               customer: customer,
               isSharedLedger: isSharedLedger,
               onSharePdf: onSharePdf,
-              nextPromise: nextPromise,
               onSetPromise: onSetPromise,
-              senderName: senderName,
+              ownerName: ownerName,
+              businessName: businessName,
             ),
             const SizedBox(height: 10),
           ],
@@ -562,17 +664,17 @@ class _QuickActions extends StatelessWidget {
   final CustomerEntity customer;
   final bool isSharedLedger;
   final Future<void> Function()? onSharePdf;
-  final PaymentPromiseEntity? nextPromise;
   final VoidCallback? onSetPromise;
-  final String senderName;
+  final String ownerName;
+  final String businessName;
 
   const _QuickActions({
     required this.customer,
     required this.isSharedLedger,
     required this.onSharePdf,
-    required this.nextPromise,
     required this.onSetPromise,
-    required this.senderName,
+    required this.ownerName,
+    required this.businessName,
   });
 
   @override
@@ -601,13 +703,11 @@ class _QuickActions extends StatelessWidget {
             if (!customer.isSettled) ...[
               _Btn(Icons.notifications_outlined, 'Remind',
                   const Color(0xFFD97706), () async {
-                final promise = nextPromise;
-                final msg = PaymentReminderMessage.build(
+                final msg = PaymentReminderMessage.buildBilingual(
                   customerName: customer.name,
-                  senderName: senderName,
-                  amount: promise?.remainingAmount ?? customer.absBalance,
-                  ownerOwes: customer.balance < 0,
-                  dueDate: promise?.promisedDate,
+                  ownerName: ownerName,
+                  businessName: businessName,
+                  amount: customer.balance,
                 );
                 final encoded = Uri.encodeComponent(msg);
                 final waUri = Uri.parse(
@@ -703,6 +803,7 @@ class _PromisePanel extends StatelessWidget {
   final ValueChanged<PaymentPromiseEntity>? onAddPayment;
   final ValueChanged<PaymentPromiseEntity>? onReschedule;
   final ValueChanged<PaymentPromiseEntity>? onContact;
+  final ValueChanged<PaymentPromiseEntity>? onCancelPromise;
 
   const _PromisePanel({
     required this.customer,
@@ -711,6 +812,7 @@ class _PromisePanel extends StatelessWidget {
     required this.onAddPayment,
     required this.onReschedule,
     required this.onContact,
+    required this.onCancelPromise,
   });
 
   @override
@@ -833,7 +935,12 @@ class _PromisePanel extends StatelessWidget {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () => _showHistory(context, promises, now),
+                onPressed: () => _showHistory(
+                  context,
+                  promises,
+                  now,
+                  onCancel: onCancelPromise,
+                ),
                 child: Text('${promises.length} in history'),
               ),
             ),
@@ -852,8 +959,9 @@ class _PromisePanel extends StatelessWidget {
   static Future<void> _showHistory(
     BuildContext context,
     List<PaymentPromiseEntity> promises,
-    DateTime now,
-  ) =>
+    DateTime now, {
+    ValueChanged<PaymentPromiseEntity>? onCancel,
+  }) =>
       showModalBottomSheet<void>(
         context: context,
         showDragHandle: true,
@@ -899,6 +1007,16 @@ class _PromisePanel extends StatelessWidget {
                           '${promise.status.label}${promise.fulfilledAmount > 0 ? ' | received ${AppFormatters.rupee(promise.fulfilledAmount)}' : ''}',
                           style: GoogleFonts.poppins(fontSize: 11),
                         ),
+                        trailing: promise.isOpen && onCancel != null
+                            ? IconButton(
+                                tooltip: 'Cancel promise',
+                                icon: const Icon(Icons.close_rounded, size: 19),
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  onCancel(promise);
+                                },
+                              )
+                            : null,
                       );
                     },
                   ),
@@ -920,6 +1038,7 @@ class _TransactionListBody extends StatelessWidget {
   final ValueChanged<PaymentPromiseEntity>? onAddPayment;
   final ValueChanged<PaymentPromiseEntity>? onReschedule;
   final ValueChanged<PaymentPromiseEntity>? onContact;
+  final ValueChanged<PaymentPromiseEntity>? onCancelPromise;
   final VoidCallback onRetry;
 
   const _TransactionListBody({
@@ -932,6 +1051,7 @@ class _TransactionListBody extends StatelessWidget {
     required this.onAddPayment,
     required this.onReschedule,
     required this.onContact,
+    required this.onCancelPromise,
     required this.onRetry,
   });
 
@@ -948,6 +1068,7 @@ class _TransactionListBody extends StatelessWidget {
             onAddPayment: onAddPayment,
             onReschedule: onReschedule,
             onContact: onContact,
+            onCancelPromise: onCancelPromise,
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
