@@ -382,6 +382,11 @@ class PdfExportService {
             pw.Text(customer.phone,
                 style:
                     pw.TextStyle(font: font, fontSize: 11, color: _textMuted)),
+            if (customer.ledgerPurpose != null &&
+                customer.ledgerPurpose!.isNotEmpty)
+              pw.Text('Due for: ${customer.ledgerPurpose!}',
+                  style: pw.TextStyle(
+                      font: font, fontSize: 10, color: _textMuted)),
             if (customer.address != null && customer.address!.isNotEmpty)
               pw.Text(customer.address!,
                   style: pw.TextStyle(
@@ -701,8 +706,9 @@ class PdfExportService {
             2: pw.FlexColumnWidth(1.5),
             3: pw.FlexColumnWidth(2.2),
             4: pw.FlexColumnWidth(2.2),
-            5: pw.FlexColumnWidth(1.3),
-            6: pw.FlexColumnWidth(1.4),
+            5: pw.FlexColumnWidth(2.2),
+            6: pw.FlexColumnWidth(1.3),
+            7: pw.FlexColumnWidth(1.4),
           },
           children: [
             pw.TableRow(
@@ -712,6 +718,7 @@ class PdfExportService {
                 'PRIMARY PHONE',
                 'SECONDARY PHONE',
                 'ADDRESS',
+                'DUE FOR',
                 'NOTES',
                 'POSITION',
                 'BALANCE',
@@ -740,6 +747,7 @@ class PdfExportService {
                 _reportCell(font, customer.phone),
                 _reportCell(font, customer.secondaryPhone ?? '-'),
                 _reportCell(font, customer.address ?? '-'),
+                _reportCell(font, customer.ledgerPurpose ?? '-'),
                 _reportCell(font, customer.notes ?? '-'),
                 _reportCell(bold, position, color: color),
                 _reportCell(

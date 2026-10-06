@@ -13,6 +13,7 @@ class AppConstants {
   // ── Firestore Collection Names ────────────────────────────────────────────
   static const String colUsers = 'users';
   static const String colCustomers = 'customers';
+  static const String colSharedLedgers = 'sharedLedgers';
   static const String colCustomerPhoneKeys = 'customerPhoneKeys';
   static const String colTransactions = 'transactions';
   static const String colPaymentPromises = 'paymentPromises';
@@ -30,6 +31,7 @@ class AppConstants {
   static const int minNameLength = 2;
   static const int maxNameLength = 50;
   static const int phoneLength = 10;
+  static const int maxLedgerPurposeLength = 120;
   static const double maxAmount = 10000000; // ₹1 Crore
 
   // ── Pagination ────────────────────────────────────────────────────────────
@@ -42,7 +44,7 @@ class AppConstants {
 
   // ── App Info ──────────────────────────────────────────────────────────────
   static const String appName = 'LenDen';
-  static const String appVersion = '1.0.3';
+  static const String appVersion = '1.0.6';
   static const String appTagline = 'Apna Hisab, Apne Sath';
   static const String supportEmail = 'vahidmansuri702@gmail.com';
   static const String privacyPolicyUrl = 'https://lenden.app/privacy';

@@ -583,35 +583,49 @@ class _DateChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final d = DateTime(date.year, date.month, date.day);
-    final label = d == today
-        ? 'Today'
-        : d == today.subtract(const Duration(days: 1))
-            ? 'Yesterday'
-            : DateFormat('d MMM yyyy').format(date);
+    final label = DateFormat('EEEE, d MMMM yyyy').format(date);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurface : AppColors.surface,
+    return Semantics(
+      button: true,
+      label: 'Entry date, $label',
+      child: Material(
+        color: isDark ? AppColors.darkSurface : AppColors.surface,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
+          side: BorderSide(
               color: isDark ? AppColors.darkBorder : AppColors.border),
         ),
-        child: Row(children: [
-          Icon(Icons.event_rounded, size: 18, color: cs.primary),
-          const SizedBox(width: 10),
-          Text(label,
-              style: GoogleFonts.poppins(
-                  fontSize: 14, fontWeight: FontWeight.w500)),
-          const Spacer(),
-          Icon(Icons.chevron_right_rounded,
-              size: 18, color: cs.onSurface.withOpacity(0.35)),
-        ]),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(children: [
+              Icon(Icons.event_rounded, size: 18, color: cs.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Entry date',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(label,
+                        style: GoogleFonts.poppins(
+                            fontSize: 14, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded,
+                  size: 18, color: cs.onSurface.withOpacity(0.35)),
+            ]),
+          ),
+        ),
       ),
     );
   }
@@ -643,7 +657,8 @@ class _NoteField extends StatelessWidget {
         style: GoogleFonts.poppins(fontSize: 14),
         decoration: InputDecoration(
           counterText: '',
-          hintText: 'Add a note… (optional)',
+          labelText: 'Transaction note',
+          hintText: 'e.g. TV down payment due',
           hintStyle: GoogleFonts.poppins(
               fontSize: 13, color: cs.onSurface.withOpacity(0.35)),
           prefixIcon: Padding(

@@ -53,92 +53,118 @@ class TransactionTile extends StatelessWidget {
               ),
           ],
         ),
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              // ── Date + note ───────────────────────────────────────────
-              Expanded(
-                flex: 4,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: isGave ? AppColors.success : AppColors.danger,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              fmtDate,
-                              style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: cs.onSurface.withOpacity(0.74)),
+        child: Column(
+          children: [
+            IntrinsicHeight(
+              child: Row(
+                children: [
+                  // ── Date + note ───────────────────────────────────────────
+                  Expanded(
+                    flex: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color:
+                                  isGave ? AppColors.success : AppColors.danger,
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              transaction.note?.isNotEmpty == true
-                                  ? transaction.note!
-                                  : (isGave
-                                      ? 'You gave money'
-                                      : 'You got money'),
-                              style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  color: cs.onSurface.withOpacity(0.45)),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  fmtDate,
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: cs.onSurface.withOpacity(0.74)),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  isGave ? 'You gave' : 'You got',
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      color: cs.onSurface.withOpacity(0.45)),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
 
-              // ── Divider ───────────────────────────────────────────────
-              VerticalDivider(
-                width: 1,
+                  // ── Divider ───────────────────────────────────────────────
+                  VerticalDivider(
+                    width: 1,
+                    color: isDark ? AppColors.darkBorder : AppColors.border,
+                  ),
+
+                  // ── Gave column ───────────────────────────────────────────
+                  Expanded(
+                    flex: 3,
+                    child: _AmountCell(
+                      amount: isGave ? fmt : null,
+                      color: AppColors.success,
+                      label: 'Gave',
+                    ),
+                  ),
+
+                  // ── Divider ───────────────────────────────────────────────
+                  VerticalDivider(
+                    width: 1,
+                    color: isDark ? AppColors.darkBorder : AppColors.border,
+                  ),
+
+                  // ── Got column ────────────────────────────────────────────
+                  Expanded(
+                    flex: 3,
+                    child: _AmountCell(
+                      amount: !isGave ? fmt : null,
+                      color: AppColors.danger,
+                      label: 'Got',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (transaction.note?.trim().isNotEmpty == true) ...[
+              Divider(
+                height: 1,
                 color: isDark ? AppColors.darkBorder : AppColors.border,
               ),
-
-              // ── Gave column ───────────────────────────────────────────
-              Expanded(
-                flex: 3,
-                child: _AmountCell(
-                  amount: isGave ? fmt : null,
-                  color: AppColors.success,
-                  label: 'Gave',
-                ),
-              ),
-
-              // ── Divider ───────────────────────────────────────────────
-              VerticalDivider(
-                width: 1,
-                color: isDark ? AppColors.darkBorder : AppColors.border,
-              ),
-
-              // ── Got column ────────────────────────────────────────────
-              Expanded(
-                flex: 3,
-                child: _AmountCell(
-                  amount: !isGave ? fmt : null,
-                  color: AppColors.danger,
-                  label: 'Got',
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.notes_rounded,
+                        size: 17, color: cs.onSurfaceVariant),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        transaction.note!.trim(),
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          height: 1.45,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
-          ),
+          ],
         ),
       ),
     )
@@ -148,12 +174,7 @@ class TransactionTile extends StatelessWidget {
   }
 
   String _fmtDate(DateTime dt) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final d = DateTime(dt.year, dt.month, dt.day);
-    if (d == today) return 'Today';
-    if (d == today.subtract(const Duration(days: 1))) return 'Yesterday';
-    return DateFormat('d MMM yy').format(dt);
+    return DateFormat('d MMM yyyy').format(dt);
   }
 
   String _fmtAmount(double v) {

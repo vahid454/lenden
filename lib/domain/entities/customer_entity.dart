@@ -7,6 +7,7 @@ class CustomerEntity extends Equatable {
   final String phone;
   final String? secondaryPhone;
   final String? address;
+  final String? ledgerPurpose;
   final String? notes;
   final String? photoPath;
   final DateTime createdAt;
@@ -32,6 +33,7 @@ class CustomerEntity extends Equatable {
     required this.phone,
     this.secondaryPhone,
     this.address,
+    this.ledgerPurpose,
     this.notes,
     this.photoPath,
     required this.createdAt,
@@ -64,6 +66,7 @@ class CustomerEntity extends Equatable {
     String? phone,
     String? secondaryPhone,
     String? address,
+    String? ledgerPurpose,
     String? notes,
     String? photoPath,
     DateTime? createdAt,
@@ -76,6 +79,7 @@ class CustomerEntity extends Equatable {
     DateTime? defaulterMarkedAt,
     bool clearSecondaryPhone = false,
     bool clearAddress = false,
+    bool clearLedgerPurpose = false,
     bool clearNotes = false,
     bool clearPhotoPath = false,
     bool clearDefaulterNote = false,
@@ -89,6 +93,8 @@ class CustomerEntity extends Equatable {
       secondaryPhone:
           clearSecondaryPhone ? null : secondaryPhone ?? this.secondaryPhone,
       address: clearAddress ? null : address ?? this.address,
+      ledgerPurpose:
+          clearLedgerPurpose ? null : ledgerPurpose ?? this.ledgerPurpose,
       notes: clearNotes ? null : notes ?? this.notes,
       photoPath: clearPhotoPath ? null : photoPath ?? this.photoPath,
       createdAt: createdAt ?? this.createdAt,
@@ -113,6 +119,7 @@ class CustomerEntity extends Equatable {
         phone,
         secondaryPhone,
         address,
+        ledgerPurpose,
         notes,
         photoPath,
         createdAt,

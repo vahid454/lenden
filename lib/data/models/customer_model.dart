@@ -9,6 +9,7 @@ class CustomerModel extends CustomerEntity {
     required super.phone,
     super.secondaryPhone,
     super.address,
+    super.ledgerPurpose,
     super.notes,
     super.photoPath,
     required super.createdAt,
@@ -31,6 +32,7 @@ class CustomerModel extends CustomerEntity {
       phone: d['phone'] as String? ?? '',
       secondaryPhone: d['secondaryPhone'] as String?,
       address: d['address'] as String?,
+      ledgerPurpose: d['ledgerPurpose'] as String?,
       notes: d['notes'] as String?,
       photoPath: d['photoPath'] as String?,
       balance: (d['balance'] as num?)?.toDouble() ?? 0.0,
@@ -53,6 +55,8 @@ class CustomerModel extends CustomerEntity {
       if (secondaryPhone != null && secondaryPhone!.isNotEmpty)
         'secondaryPhone': secondaryPhone,
       if (address != null && address!.isNotEmpty) 'address': address,
+      if (ledgerPurpose != null && ledgerPurpose!.isNotEmpty)
+        'ledgerPurpose': ledgerPurpose,
       if (notes != null && notes!.isNotEmpty) 'notes': notes,
       if (photoPath != null && photoPath!.isNotEmpty) 'photoPath': photoPath,
       if (ownerName != null && ownerName!.isNotEmpty) 'ownerName': ownerName,
@@ -81,6 +85,7 @@ class CustomerModel extends CustomerEntity {
       phone: e.phone,
       secondaryPhone: e.secondaryPhone,
       address: e.address,
+      ledgerPurpose: e.ledgerPurpose,
       notes: e.notes,
       photoPath: e.photoPath,
       createdAt: e.createdAt,
@@ -102,6 +107,7 @@ class CustomerModel extends CustomerEntity {
     String? phone,
     String? secondaryPhone,
     String? address,
+    String? ledgerPurpose,
     String? notes,
     String? photoPath,
     DateTime? createdAt,
@@ -114,6 +120,7 @@ class CustomerModel extends CustomerEntity {
     DateTime? defaulterMarkedAt,
     bool clearSecondaryPhone = false,
     bool clearAddress = false,
+    bool clearLedgerPurpose = false,
     bool clearNotes = false,
     bool clearPhotoPath = false,
     bool clearDefaulterNote = false,
@@ -127,6 +134,8 @@ class CustomerModel extends CustomerEntity {
       secondaryPhone:
           clearSecondaryPhone ? null : secondaryPhone ?? this.secondaryPhone,
       address: clearAddress ? null : address ?? this.address,
+      ledgerPurpose:
+          clearLedgerPurpose ? null : ledgerPurpose ?? this.ledgerPurpose,
       notes: clearNotes ? null : notes ?? this.notes,
       photoPath: clearPhotoPath ? null : photoPath ?? this.photoPath,
       createdAt: createdAt ?? this.createdAt,
@@ -142,4 +151,21 @@ class CustomerModel extends CustomerEntity {
           : defaulterMarkedAt ?? this.defaulterMarkedAt,
     );
   }
+
+  /// Public, read-only ledger projection. Owner-private fields are omitted.
+  Map<String, dynamic> toSharedLedgerFirestore() => {
+        'userId': userId,
+        'name': name,
+        'phone': phone,
+        'phoneE164': '+91$phone',
+        if (address != null && address!.isNotEmpty) 'address': address,
+        if (ledgerPurpose != null && ledgerPurpose!.isNotEmpty)
+          'ledgerPurpose': ledgerPurpose,
+        if (ownerName != null && ownerName!.isNotEmpty) 'ownerName': ownerName,
+        if (ownerPhone != null && ownerPhone!.isNotEmpty)
+          'ownerPhone': ownerPhone,
+        'balance': balance,
+        'createdAt': Timestamp.fromDate(createdAt),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
 }

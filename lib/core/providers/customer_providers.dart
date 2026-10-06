@@ -55,6 +55,7 @@ final customersStreamProvider =
 
   final remote = ref.watch(customerRemoteDataSourceProvider);
   await remote.ensurePhoneReservations(user.id);
+  await remote.ensureSharedLedgerProjections(user.id);
 
   final useCase = ref.watch(watchCustomersUseCaseProvider);
   await for (final either in useCase(user.id)) {
@@ -65,14 +66,14 @@ final customersStreamProvider =
 final sharedCustomersStreamProvider =
     StreamProvider<List<CustomerEntity>>((ref) async* {
   final user = ref.watch(currentUserProvider);
-  final normalizedPhone = _normalizePhone(user);
-  if (user == null || user.id.isEmpty || normalizedPhone.isEmpty) {
+  final phoneE164 = _phoneE164(user);
+  if (user == null || user.id.isEmpty || phoneE164.isEmpty) {
     yield [];
     return;
   }
 
   final remote = ref.watch(customerRemoteDataSourceProvider);
-  await for (final customers in remote.watchCustomersByPhone(normalizedPhone)) {
+  await for (final customers in remote.watchSharedLedgersByPhone(phoneE164)) {
     yield customers.where((customer) => customer.userId != user.id).toList();
   }
 });
@@ -114,8 +115,8 @@ final netBalanceProvider = Provider<double>((ref) {
   return ref.watch(totalToReceiveProvider) - ref.watch(totalToPayProvider);
 });
 
-String _normalizePhone(UserEntity? user) {
+String _phoneE164(UserEntity? user) {
   final digits = user?.phone.replaceAll(RegExp(r'\D'), '') ?? '';
-  if (digits.length <= 10) return digits;
-  return digits.substring(digits.length - 10);
+  if (digits.length < 10) return '';
+  return '+91${digits.substring(digits.length - 10)}';
 }

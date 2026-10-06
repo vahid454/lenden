@@ -36,12 +36,14 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _secondaryPhoneCtrl;
   late final TextEditingController _addressCtrl;
+  late final TextEditingController _ledgerPurposeCtrl;
   late final TextEditingController _notesCtrl;
 
   final _nameFocus = FocusNode();
   final _phoneFocus = FocusNode();
   final _secondaryPhoneFocus = FocusNode();
   final _addressFocus = FocusNode();
+  final _ledgerPurposeFocus = FocusNode();
   final _notesFocus = FocusNode();
   Uint8List? _photoBytes;
 
@@ -54,8 +56,8 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
     _phoneCtrl = TextEditingController(text: c?.phone ?? '');
     _secondaryPhoneCtrl = TextEditingController(text: c?.secondaryPhone ?? '');
     _addressCtrl = TextEditingController(text: c?.address ?? '');
+    _ledgerPurposeCtrl = TextEditingController(text: c?.ledgerPurpose ?? '');
     _notesCtrl = TextEditingController(text: c?.notes ?? '');
-
   }
 
   @override
@@ -64,11 +66,13 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
     _phoneCtrl.dispose();
     _secondaryPhoneCtrl.dispose();
     _addressCtrl.dispose();
+    _ledgerPurposeCtrl.dispose();
     _notesCtrl.dispose();
     _nameFocus.dispose();
     _phoneFocus.dispose();
     _secondaryPhoneFocus.dispose();
     _addressFocus.dispose();
+    _ledgerPurposeFocus.dispose();
     _notesFocus.dispose();
     super.dispose();
   }
@@ -88,6 +92,7 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
         phone: _phoneCtrl.text,
         secondaryPhone: _secondaryPhoneCtrl.text,
         address: _addressCtrl.text,
+        ledgerPurpose: _ledgerPurposeCtrl.text,
         notes: _notesCtrl.text,
         photoBytes: _photoBytes,
       );
@@ -97,6 +102,7 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
         phone: _phoneCtrl.text,
         secondaryPhone: _secondaryPhoneCtrl.text,
         address: _addressCtrl.text,
+        ledgerPurpose: _ledgerPurposeCtrl.text,
         notes: _notesCtrl.text,
         photoBytes: _photoBytes,
       );
@@ -271,14 +277,27 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
                     focusNode: _secondaryPhoneFocus,
                     label: 'Secondary Mobile Number',
                     validator: Validators.optionalPhone,
-                    onEditingComplete: () => _addressFocus.requestFocus(),
+                    onEditingComplete: () => _ledgerPurposeFocus.requestFocus(),
                   ).animate().fadeIn(delay: 225.ms),
 
                   const SizedBox(height: 24),
 
                   // ── Section: Optional ────────────────────────────────────
-                  const _SectionLabel(label: 'Optional Details'),
+                  const _SectionLabel(label: 'Ledger Details'),
                   const SizedBox(height: 12),
+
+                  AppTextField(
+                    controller: _ledgerPurposeCtrl,
+                    label: 'Product / Due For',
+                    hint: 'e.g. Samsung TV down payment',
+                    prefixIcon: Icons.inventory_2_outlined,
+                    focusNode: _ledgerPurposeFocus,
+                    maxLength: AppConstants.maxLedgerPurposeLength,
+                    textInputAction: TextInputAction.next,
+                    onEditingComplete: () => _addressFocus.requestFocus(),
+                  ).animate().fadeIn(delay: 250.ms),
+
+                  const SizedBox(height: 14),
 
                   // Address
                   AppTextField(
@@ -290,7 +309,7 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
                     textInputAction: TextInputAction.next,
                     onEditingComplete: () => _notesFocus.requestFocus(),
                     validator: Validators.optionalName,
-                  ).animate().fadeIn(delay: 250.ms),
+                  ).animate().fadeIn(delay: 275.ms),
 
                   const SizedBox(height: 14),
 
@@ -304,8 +323,8 @@ class _AddEditCustomerPageState extends ConsumerState<AddEditCustomerPage> {
                     onEditingComplete: _onSave,
                     style: GoogleFonts.poppins(fontSize: 14),
                     decoration: const InputDecoration(
-                      labelText: 'Notes',
-                      hintText: 'e.g. Shop owner, meets every Tuesday…',
+                      labelText: 'Private Notes',
+                      hintText: 'e.g. Best time to call is Tuesday morning',
                       prefixIcon: Padding(
                         padding: EdgeInsets.only(bottom: 40),
                         child: Icon(Icons.note_outlined, size: 20),

@@ -33,7 +33,7 @@ class AuthRemoteDataSource {
           _logger.i('Auto-verification triggered');
         },
         verificationFailed: (FirebaseAuthException e) {
-          _logger.e('OTP send failed: ${e.code}');
+          _logger.e('OTP send failed: ${e.code} - ${e.message}');
           if (!completer.isCompleted) {
             completer.completeError(
                 AppException(_mapAuthError(e.code, e.message), code: e.code));
@@ -47,9 +47,21 @@ class AuthRemoteDataSource {
           if (!completer.isCompleted) completer.complete(verificationId);
         },
       );
-    } catch (e) {
+    } on FirebaseAuthException catch (e) {
       if (!completer.isCompleted) {
-        completer.completeError(AppException('Failed to send OTP: $e'));
+        completer.completeError(
+            AppException(_mapAuthError(e.code, e.message), code: e.code));
+      }
+    } on AppException {
+      rethrow;
+    } catch (e, stackTrace) {
+      _logger.e('Unexpected OTP send failure',
+          error: e, stackTrace: stackTrace);
+      if (!completer.isCompleted) {
+        completer.completeError(const AppException(
+          'Could not request an OTP. Please check your connection and try again.',
+          code: 'otp-request-failed',
+        ));
       }
     }
     return completer.future;
@@ -184,7 +196,12 @@ class AuthRemoteDataSource {
       case 'operation-not-allowed':
         return 'Phone sign-in is not enabled in Firebase Authentication.';
       case 'app-not-authorized':
-        return 'App not authorised. Add SHA-1 to Firebase.';
+      case 'missing-app-credential':
+      case 'missing-client-identifier':
+      case 'invalid-app-credential':
+      case 'invalid-cert-hash':
+      case 'invalid-app-id':
+        return 'This LenDen installation could not be verified by Firebase. Install the latest app build, then try again.';
       default:
         return message ?? 'Authentication failed. Please try again.';
     }

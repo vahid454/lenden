@@ -80,6 +80,28 @@ void main() {
     expect(selected, isNull);
   });
 
+  test('payment before due date fulfils a smaller promise created that day',
+      () {
+    final selected = selectPromiseForPayment(
+      promises: [
+        PaymentPromiseEntity(
+          id: 'fardin-promise',
+          userId: 'owner',
+          customerId: 'fardin',
+          amount: 300,
+          promisedDate: DateTime(2026, 10, 1),
+          createdAt: DateTime(2026, 9, 30, 14, 30),
+          updatedAt: DateTime(2026, 9, 30, 14, 30),
+        ),
+      ],
+      customerId: 'fardin',
+      paymentDate: DateTime(2026, 9, 30, 15),
+    );
+
+    expect(selected?.id, 'fardin-promise');
+    expect(selected?.amount, 300);
+  });
+
   test('legacy partial promise is fulfilled and no longer open', () {
     expect(PaymentPromiseStatus.partialPaid.isOpen, isFalse);
   });

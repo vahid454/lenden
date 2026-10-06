@@ -69,14 +69,11 @@ class _ProfileSetupPageState extends ConsumerState<ProfileSetupPage> {
 
     if (!success || !mounted) return;
 
-    // Wait for authStateChanges to emit the new profile (up to 3s)
-    // This ensures the router sees hasProfile=true before we navigate
-    for (int i = 0; i < 6; i++) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (!mounted) return;
-      final user = ref.read(currentUserProvider);
-      if (user != null && user.name.isNotEmpty) break;
-    }
+    // Creating the Firestore profile does not emit a Firebase Auth event.
+    // Refresh the combined auth/profile state so the router sees the saved
+    // profile before it evaluates the dashboard redirect.
+    ref.invalidate(authStateProvider);
+    await ref.read(authStateProvider.future);
 
     if (mounted) context.go(AppRoutes.dashboard);
   }

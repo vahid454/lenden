@@ -1028,6 +1028,136 @@ class _PromisePanel extends StatelessWidget {
       );
 }
 
+class _CustomerContextPanel extends StatelessWidget {
+  final CustomerEntity customer;
+  final List<TransactionEntity> transactions;
+  final bool isSharedLedger;
+
+  const _CustomerContextPanel({
+    required this.customer,
+    required this.transactions,
+    required this.isSharedLedger,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    DateTime? ledgerSince;
+    for (final transaction in transactions) {
+      if (ledgerSince == null || transaction.date.isBefore(ledgerSince)) {
+        ledgerSince = transaction.date;
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.receipt_long_outlined, size: 19, color: cs.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Ledger details',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _LedgerDetailRow(
+            icon: Icons.inventory_2_outlined,
+            label: 'Due for',
+            value: customer.ledgerPurpose?.trim().isNotEmpty == true
+                ? customer.ledgerPurpose!.trim()
+                : 'Not provided',
+          ),
+          const SizedBox(height: 10),
+          _LedgerDetailRow(
+            icon: Icons.location_on_outlined,
+            label: 'Address',
+            value: customer.address?.trim().isNotEmpty == true
+                ? customer.address!.trim()
+                : 'Not provided',
+          ),
+          const SizedBox(height: 10),
+          _LedgerDetailRow(
+            icon: Icons.calendar_month_outlined,
+            label: 'Ledger since',
+            value: ledgerSince == null
+                ? 'No entries yet'
+                : DateFormat('d MMMM yyyy').format(ledgerSince),
+          ),
+          if (!isSharedLedger && customer.notes?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 10),
+            _LedgerDetailRow(
+              icon: Icons.lock_outline_rounded,
+              label: 'Private note',
+              value: customer.notes!.trim(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _LedgerDetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _LedgerDetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: cs.onSurfaceVariant),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 82,
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              height: 1.45,
+              fontWeight: FontWeight.w500,
+              color: cs.onSurface,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _TransactionListBody extends StatelessWidget {
   final CustomerEntity customer;
   final bool isSharedLedger;
@@ -1060,6 +1190,11 @@ class _TransactionListBody extends StatelessWidget {
     return Column(
       children: [
         const SizedBox(height: 8),
+        _CustomerContextPanel(
+          customer: customer,
+          transactions: transactions,
+          isSharedLedger: isSharedLedger,
+        ),
         if (!isSharedLedger)
           _PromisePanel(
             customer: customer,
@@ -1123,7 +1258,7 @@ class _TransactionListBody extends StatelessWidget {
     return Column(
       children: [
         // Column headers
-        _LedgerColumnHeader(),
+        const _LedgerColumnHeader(),
         Expanded(
             child: ListView.builder(
           padding: const EdgeInsets.only(bottom: 120),
@@ -1132,10 +1267,10 @@ class _TransactionListBody extends StatelessWidget {
             final month = grouped.keys.elementAt(groupIdx);
             final items = grouped[month]!;
             final gave = items
-                .where((t) => t.isGave)
+                .where((t) => isSharedLedger ? t.isGot : t.isGave)
                 .fold(0.0, (sum, t) => sum + t.amount);
             final got = items
-                .where((t) => t.isGot)
+                .where((t) => isSharedLedger ? t.isGave : t.isGot)
                 .fold(0.0, (sum, t) => sum + t.amount);
 
             return Column(

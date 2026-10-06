@@ -14,6 +14,17 @@ service cloud.firestore {
     function isOptionalTimestamp(field) {
       return !(field in request.resource.data) || request.resource.data[field] is timestamp;
     }
+    function hasVerifiedPhone(phoneE164) {
+      return isSignedIn()
+          && request.auth.token.phone_number is string
+          && request.auth.token.phone_number == phoneE164;
+    }
+    function canReadSharedLedger(customerId) {
+      return exists(/databases/$(database)/documents/sharedLedgers/$(customerId))
+          && hasVerifiedPhone(
+            get(/databases/$(database)/documents/sharedLedgers/$(customerId)).data.phoneE164
+          );
+    }
     function hasValidCustomerFields() {
       return request.resource.data.keys().hasOnly([
           'userId',
@@ -21,6 +32,7 @@ service cloud.firestore {
           'phone',
           'secondaryPhone',
           'address',
+          'ledgerPurpose',
           'notes',
           'photoPath',
           'ownerName',
@@ -44,6 +56,9 @@ service cloud.firestore {
         && (!('secondaryPhone' in request.resource.data)
             || request.resource.data.secondaryPhone.matches('^[6-9][0-9]{9}$'))
         && isOptionalString('address')
+        && isOptionalString('ledgerPurpose')
+        && (!('ledgerPurpose' in request.resource.data)
+            || request.resource.data.ledgerPurpose.size() <= 120)
         && isOptionalString('notes')
         && isOptionalString('photoPath')
         && isOptionalString('ownerName')
@@ -55,6 +70,37 @@ service cloud.firestore {
             || request.resource.data.defaulterNote.size() <= 500)
         && isOptionalTimestamp('defaulterMarkedAt')
         && request.resource.data.balance is number;
+    }
+    function hasValidSharedLedgerFields() {
+      return request.resource.data.keys().hasOnly([
+          'userId',
+          'name',
+          'phone',
+          'phoneE164',
+          'address',
+          'ledgerPurpose',
+          'ownerName',
+          'ownerPhone',
+          'balance',
+          'createdAt',
+          'updatedAt',
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 50
+        && request.resource.data.phone is string
+        && request.resource.data.phone.matches('^[6-9][0-9]{9}$')
+        && request.resource.data.phoneE164 == '+91' + request.resource.data.phone
+        && isOptionalString('address')
+        && isOptionalString('ledgerPurpose')
+        && (!('ledgerPurpose' in request.resource.data)
+            || request.resource.data.ledgerPurpose.size() <= 120)
+        && isOptionalString('ownerName')
+        && isOptionalString('ownerPhone')
+        && request.resource.data.balance is number
+        && request.resource.data.createdAt is timestamp
+        && isOptionalTimestamp('updatedAt');
     }
     function hasValidTransactionFields() {
       return request.resource.data.keys().hasOnly([
@@ -180,6 +226,21 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Sanitized customer-facing ledger. Private notes and collection-risk
+    // metadata stay exclusively in /customers.
+    match /sharedLedgers/{customerId} {
+      allow read: if isSignedIn()
+                  && (resource.data.userId == request.auth.uid
+                      || hasVerifiedPhone(resource.data.phoneE164));
+      allow create: if isSignedIn() && hasValidSharedLedgerFields();
+      allow update: if isSignedIn()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == resource.data.userId
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && hasValidSharedLedgerFields();
+      allow delete: if false;
+    }
+
     // ── Customer phone uniqueness ─────────────────────────────────────────
     // A deterministic reservation makes each primary phone unique per owner.
     match /customerPhoneKeys/{phoneKey} {
@@ -202,7 +263,9 @@ service cloud.firestore {
 
     // ── Transactions ──────────────────────────────────────────────────────
     match /transactions/{transactionId} {
-      allow read:   if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read:   if isSignedIn()
+                    && (resource.data.userId == request.auth.uid
+                        || canReadSharedLedger(resource.data.customerId));
       allow create: if isSignedIn()
                       && hasValidTransactionFields()
                       && exists(/databases/$(database)/documents/customers/$(request.resource.data.customerId))

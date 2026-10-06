@@ -19,6 +19,8 @@ class CustomerRemoteDataSource {
       _firestore.collection(AppConstants.colCustomers);
   CollectionReference<Map<String, dynamic>> get _phoneKeys =>
       _firestore.collection(AppConstants.colCustomerPhoneKeys);
+  CollectionReference<Map<String, dynamic>> get _sharedLedgers =>
+      _firestore.collection(AppConstants.colSharedLedgers);
 
   // ── Watch customers (real-time) ───────────────────────────────────────────
   // NOTE: orderBy('nameLower') requires a composite Firestore index.
@@ -39,18 +41,50 @@ class CustomerRemoteDataSource {
     });
   }
 
-  Stream<List<CustomerModel>> watchCustomersByPhone(String phone) {
-    return _col
-        .where('phone', isEqualTo: phone)
+  Stream<List<CustomerModel>> watchSharedLedgersByPhone(String phoneE164) {
+    return _sharedLedgers
+        .where('phoneE164', isEqualTo: phoneE164)
         .snapshots()
         .handleError((error) {
-      _logger.e('watchCustomersByPhone error: $error');
+      _logger.e('watchSharedLedgersByPhone error: $error');
     }).map((snapshot) {
       final list =
           snapshot.docs.map((doc) => CustomerModel.fromFirestore(doc)).toList();
       list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       return list;
     });
+  }
+
+  /// Backfills sanitized shared-ledger records for customers created by older
+  /// app versions. Private notes and collection-risk fields are never copied.
+  Future<void> ensureSharedLedgerProjections(String userId) async {
+    try {
+      final results = await Future.wait([
+        _col.where('userId', isEqualTo: userId).get(),
+        _sharedLedgers.where('userId', isEqualTo: userId).get(),
+      ]);
+      final existing = results[1].docs.map((doc) => doc.id).toSet();
+      WriteBatch batch = _firestore.batch();
+      var pendingWrites = 0;
+
+      for (final doc in results[0].docs) {
+        if (existing.contains(doc.id)) continue;
+        final customer = CustomerModel.fromFirestore(doc);
+        batch.set(
+          _sharedLedgers.doc(doc.id),
+          customer.toSharedLedgerFirestore(),
+        );
+        pendingWrites++;
+        if (pendingWrites == 400) {
+          await batch.commit();
+          batch = _firestore.batch();
+          pendingWrites = 0;
+        }
+      }
+      if (pendingWrites > 0) await batch.commit();
+    } on FirebaseException catch (e) {
+      _logger.w('ensureSharedLedgerProjections: ${e.code}');
+    }
   }
 
   /// Creates missing uniqueness records for customers saved before phone keys
@@ -114,10 +148,25 @@ class CustomerRemoteDataSource {
 
       // The ID is the server-enforced uniqueness key for this owner and phone.
       final docRef = _col.doc(_phoneKey(customer.userId, normalizedPhone));
-      final customerData =
-          customer.copyWith(phone: normalizedPhone).toFirestore();
+      final normalizedCustomer = customer.copyWith(phone: normalizedPhone);
+      final customerData = normalizedCustomer.toFirestore();
       try {
-        await docRef.set(customerData);
+        await _firestore.runTransaction((transaction) async {
+          final existingCustomer = await transaction.get(docRef);
+          if (existingCustomer.exists) {
+            throw const AppException(
+              'A customer with this mobile number already exists.',
+              code: 'customer-already-exists',
+            );
+          }
+          transaction.set(docRef, customerData);
+          transaction.set(
+            _sharedLedgers.doc(docRef.id),
+            normalizedCustomer.toSharedLedgerFirestore(),
+          );
+        });
+      } on AppException {
+        rethrow;
       } on FirebaseException catch (e) {
         if (e.code == 'permission-denied' && (await docRef.get()).exists) {
           throw const AppException(
@@ -164,6 +213,9 @@ class CustomerRemoteDataSource {
       if (customer.address == null || customer.address!.isEmpty) {
         data['address'] = FieldValue.delete();
       }
+      if (customer.ledgerPurpose == null || customer.ledgerPurpose!.isEmpty) {
+        data['ledgerPurpose'] = FieldValue.delete();
+      }
       if (customer.notes == null || customer.notes!.isEmpty) {
         data['notes'] = FieldValue.delete();
       }
@@ -171,6 +223,9 @@ class CustomerRemoteDataSource {
         data['photoPath'] = FieldValue.delete();
       }
       final customerRef = _col.doc(customer.id);
+      final sharedLedgerRef = _sharedLedgers.doc(customer.id);
+      final sharedLedgerData =
+          customer.copyWith(phone: normalizedPhone).toSharedLedgerFirestore();
       final phoneKeyRef = _phoneKeys.doc(
         _phoneKey(customer.userId, normalizedPhone),
       );
@@ -181,7 +236,10 @@ class CustomerRemoteDataSource {
       final currentPhone =
           _normalizePhone(currentCustomer.data()?['phone'] as String? ?? '');
       if (currentPhone == normalizedPhone) {
-        await customerRef.update(data);
+        final batch = _firestore.batch();
+        batch.update(customerRef, data);
+        batch.set(sharedLedgerRef, sharedLedgerData);
+        await batch.commit();
       } else {
         final batch = _firestore.batch();
         batch.set(phoneKeyRef, {
@@ -191,6 +249,7 @@ class CustomerRemoteDataSource {
           'createdAt': FieldValue.serverTimestamp(),
         });
         batch.update(customerRef, data);
+        batch.set(sharedLedgerRef, sharedLedgerData);
         try {
           await batch.commit();
         } on FirebaseException catch (e) {

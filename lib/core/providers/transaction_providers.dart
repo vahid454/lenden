@@ -6,6 +6,7 @@ import '../../domain/entities/transaction_entity.dart';
 import '../../domain/repositories/transaction_repository.dart';
 import '../../domain/usecases/transaction_usecases.dart';
 import 'auth_providers.dart';
+import 'customer_providers.dart';
 
 // ── Infrastructure ────────────────────────────────────────────────────────────
 
@@ -54,15 +55,22 @@ final getTransactionsByDateRangeUseCaseProvider =
 final transactionsStreamProvider =
     StreamProvider.family<List<TransactionEntity>, String>(
         (ref, customerId) async* {
-  final userId = ref.watch(currentUserProvider)?.id;
+  final currentUserId = ref.watch(currentUserProvider)?.id;
+  final matchingCustomers = ref
+      .watch(visibleCustomersProvider)
+      .where((customer) => customer.id == customerId);
+  final ledgerOwnerId = matchingCustomers.isEmpty
+      ? currentUserId
+      : matchingCustomers.first.userId;
 
   // Guard: don't subscribe with empty ids
-  if (customerId.isEmpty || userId == null || userId.isEmpty) {
+  if (customerId.isEmpty || ledgerOwnerId == null || ledgerOwnerId.isEmpty) {
     yield [];
     return;
   }
   final useCase = ref.watch(watchTransactionsUseCaseProvider);
-  await for (final either in useCase(customerId: customerId, userId: userId)) {
+  await for (final either
+      in useCase(customerId: customerId, userId: ledgerOwnerId)) {
     yield either.fold((_) => <TransactionEntity>[], (list) => list);
   }
 });

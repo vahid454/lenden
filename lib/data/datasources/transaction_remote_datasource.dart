@@ -5,6 +5,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/errors/exceptions.dart';
 import '../../domain/entities/payment_promise_entity.dart';
 import '../../domain/entities/transaction_entity.dart';
+import '../models/customer_model.dart';
 import '../models/payment_promise_model.dart';
 import '../models/transaction_model.dart';
 
@@ -24,6 +25,8 @@ class TransactionRemoteDataSource {
       _db.collection(AppConstants.colCustomers);
   CollectionReference<Map<String, dynamic>> get _promiseCol =>
       _db.collection(AppConstants.colPaymentPromises);
+  CollectionReference<Map<String, dynamic>> get _sharedLedgerCol =>
+      _db.collection(AppConstants.colSharedLedgers);
 
   // ── Watch ─────────────────────────────────────────────────────────────────
   Stream<List<TransactionModel>> watchTransactions({
@@ -51,41 +54,63 @@ class TransactionRemoteDataSource {
   }) async {
     try {
       late String newId;
+      late CustomerModel updatedCustomer;
       final promiseRef = await _resolvePromiseForPayment(
         tx,
         preferredPromiseId: promiseIdToFulfill,
       );
+
+      // The money entry and balance are the authoritative ledger state. Keep
+      // them atomic, while allowing derived promise/share updates to recover
+      // independently instead of blocking a valid payment.
       await _db.runTransaction((ftx) async {
         final txRef = _txCol.doc();
         final custRef = _custCol.doc(tx.customerId);
         newId = txRef.id;
-        await ftx.get(custRef);
-        final promiseSnapshot = promiseRef == null
-            ? null
-            : await ftx.get<Map<String, dynamic>>(promiseRef);
+        final customerSnapshot = await ftx.get(custRef);
+        if (!customerSnapshot.exists) {
+          throw const AppException(
+            'This customer no longer exists. Refresh the ledger and retry.',
+            code: 'customer-not-found',
+          );
+        }
+        final customer = CustomerModel.fromFirestore(customerSnapshot);
+        if (customer.userId != tx.userId) {
+          throw const AppException(
+            'This customer belongs to a different account.',
+            code: 'customer-owner-mismatch',
+          );
+        }
+        updatedCustomer =
+            customer.copyWith(balance: customer.balance + tx.balanceDelta);
         ftx.set(txRef, tx.toFirestore());
         ftx.update(custRef, {
           'balance': FieldValue.increment(tx.balanceDelta),
           'updatedAt': FieldValue.serverTimestamp(),
         });
-        if (_canFulfillPromise(promiseSnapshot, tx)) {
-          final promiseData = promiseSnapshot!.data()!;
-          final promisedAmount = (promiseData['amount'] as num).toDouble();
-          final previouslyFulfilled =
-              (promiseData['fulfilledAmount'] as num?)?.toDouble() ?? 0;
-          ftx.update(promiseRef!, {
-            'fulfilledAmount':
-                (previouslyFulfilled + tx.amount).clamp(0, promisedAmount),
-            'status': PaymentPromiseStatus.paid.firestoreValue,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        }
       });
+
+      await _syncSharedLedger(updatedCustomer);
+      if (promiseRef != null) {
+        await _fulfillPromiseAfterPayment(promiseRef, tx);
+      }
       _log.i('Transaction added: $newId');
       return tx.copyWith(id: newId);
+    } on AppException {
+      rethrow;
     } on FirebaseException catch (e) {
       _log.e('addTransaction: ${e.code}');
       throw AppException('Failed to add entry: ${e.message}', code: e.code);
+    } catch (error, stackTrace) {
+      _log.e(
+        'addTransaction unexpected',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      throw const AppException(
+        'This customer ledger needs repair before an entry can be saved.',
+        code: 'customer-ledger-invalid',
+      );
     }
   }
 
@@ -96,11 +121,22 @@ class TransactionRemoteDataSource {
     if (!tx.isGot) return null;
 
     try {
-      final snapshot =
-          await _promiseCol.where('userId', isEqualTo: tx.userId).get();
-      final promises = snapshot.docs
-          .map(PaymentPromiseModel.fromFirestore)
-          .toList(growable: false);
+      final snapshot = await _promiseCol
+          .where('userId', isEqualTo: tx.userId)
+          .where('customerId', isEqualTo: tx.customerId)
+          .get();
+      final promises = <PaymentPromiseModel>[];
+      for (final document in snapshot.docs) {
+        try {
+          promises.add(PaymentPromiseModel.fromFirestore(document));
+        } catch (error, stackTrace) {
+          _log.w(
+            'Skipping malformed promise ${document.id}',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }
       final selected = selectPromiseForPayment(
         promises: promises,
         customerId: tx.customerId,
@@ -111,6 +147,63 @@ class TransactionRemoteDataSource {
     } on FirebaseException catch (error) {
       _log.w('Promise lookup skipped: ${error.code}');
       return null;
+    } catch (error, stackTrace) {
+      _log.w(
+        'Promise lookup skipped',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
+  Future<void> _syncSharedLedger(CustomerModel customer) async {
+    final reference = _sharedLedgerCol.doc(customer.id);
+    try {
+      final existing = await reference.get();
+      final data = customer.toSharedLedgerFirestore();
+      if (existing.exists) {
+        // Preserve the projection's immutable creation timestamp. This also
+        // repairs older shared records without rejecting the money entry.
+        data.remove('createdAt');
+        await reference.set(data, SetOptions(merge: true));
+      } else {
+        await reference.set(data);
+      }
+    } catch (error, stackTrace) {
+      _log.w(
+        'Shared ledger sync deferred for ${customer.id}',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _fulfillPromiseAfterPayment(
+    DocumentReference<Map<String, dynamic>> promiseRef,
+    TransactionModel tx,
+  ) async {
+    try {
+      await _db.runTransaction((ftx) async {
+        final snapshot = await ftx.get(promiseRef);
+        if (!_canFulfillPromise(snapshot, tx)) return;
+        final data = snapshot.data()!;
+        final promisedAmount = (data['amount'] as num).toDouble();
+        final previouslyFulfilled =
+            (data['fulfilledAmount'] as num?)?.toDouble() ?? 0;
+        ftx.update(promiseRef, {
+          'fulfilledAmount':
+              (previouslyFulfilled + tx.amount).clamp(0, promisedAmount),
+          'status': PaymentPromiseStatus.paid.firestoreValue,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      });
+    } catch (error, stackTrace) {
+      _log.w(
+        'Promise fulfillment deferred for ${promiseRef.id}',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -149,22 +242,51 @@ class TransactionRemoteDataSource {
     required TransactionModel newTx,
   }) async {
     try {
+      late CustomerModel updatedCustomer;
       await _db.runTransaction((ftx) async {
         final txRef = _txCol.doc(oldTx.id);
         final custRef = _custCol.doc(oldTx.customerId);
-        await ftx.get(custRef);
+        final customerSnapshot = await ftx.get(custRef);
+        if (!customerSnapshot.exists) {
+          throw const AppException(
+            'This customer no longer exists. Refresh the ledger and retry.',
+            code: 'customer-not-found',
+          );
+        }
+        final customer = CustomerModel.fromFirestore(customerSnapshot);
+        if (customer.userId != newTx.userId) {
+          throw const AppException(
+            'This customer belongs to a different account.',
+            code: 'customer-owner-mismatch',
+          );
+        }
         final netDelta = newTx.balanceDelta - oldTx.balanceDelta;
+        updatedCustomer =
+            customer.copyWith(balance: customer.balance + netDelta);
         ftx.update(txRef, newTx.copyWith(id: oldTx.id).toFirestore());
         ftx.update(custRef, {
           'balance': FieldValue.increment(netDelta),
           'updatedAt': FieldValue.serverTimestamp(),
         });
       });
+      await _syncSharedLedger(updatedCustomer);
       _log.i('Transaction updated: ${oldTx.id}');
       return newTx.copyWith(id: oldTx.id);
+    } on AppException {
+      rethrow;
     } on FirebaseException catch (e) {
       _log.e('updateTransaction: ${e.code}');
       throw AppException('Failed to update entry: ${e.message}', code: e.code);
+    } catch (error, stackTrace) {
+      _log.e(
+        'updateTransaction unexpected',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      throw const AppException(
+        'This customer ledger needs repair before the entry can be updated.',
+        code: 'customer-ledger-invalid',
+      );
     }
   }
 
@@ -174,12 +296,20 @@ class TransactionRemoteDataSource {
       await _db.runTransaction((ftx) async {
         final txRef = _txCol.doc(tx.id);
         final custRef = _custCol.doc(tx.customerId);
-        await ftx.get(custRef);
+        final sharedLedgerRef = _sharedLedgerCol.doc(tx.customerId);
+        final customerSnapshot = await ftx.get(custRef);
+        final customer = CustomerModel.fromFirestore(customerSnapshot);
         ftx.delete(txRef);
         ftx.update(custRef, {
           'balance': FieldValue.increment(-tx.balanceDelta),
           'updatedAt': FieldValue.serverTimestamp(),
         });
+        ftx.set(
+          sharedLedgerRef,
+          customer
+              .copyWith(balance: customer.balance - tx.balanceDelta)
+              .toSharedLedgerFirestore(),
+        );
       });
       _log.i('Transaction deleted: ${tx.id}');
     } on FirebaseException catch (e) {

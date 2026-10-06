@@ -56,6 +56,7 @@ class CustomerFormNotifier extends StateNotifier<CustomerFormState> {
     required String phone,
     String? secondaryPhone,
     String? address,
+    String? ledgerPurpose,
     String? notes,
     Uint8List? photoBytes,
   }) async {
@@ -95,6 +96,8 @@ class CustomerFormNotifier extends StateNotifier<CustomerFormState> {
           ? null
           : secondaryPhone?.trim(),
       address: address?.trim().isEmpty == true ? null : address?.trim(),
+      ledgerPurpose:
+          ledgerPurpose?.trim().isEmpty == true ? null : ledgerPurpose?.trim(),
       notes: notes?.trim().isEmpty == true ? null : notes?.trim(),
       createdAt: DateTime.now(),
       // Store owner info so the other party sees who added them
@@ -150,6 +153,7 @@ class CustomerFormNotifier extends StateNotifier<CustomerFormState> {
     required String phone,
     String? secondaryPhone,
     String? address,
+    String? ledgerPurpose,
     String? notes,
     Uint8List? photoBytes,
   }) async {
@@ -168,6 +172,9 @@ class CustomerFormNotifier extends StateNotifier<CustomerFormState> {
       clearSecondaryPhone: secondaryPhone?.trim().isEmpty == true,
       address: address?.trim().isEmpty == true ? null : address?.trim(),
       clearAddress: address?.trim().isEmpty == true,
+      ledgerPurpose:
+          ledgerPurpose?.trim().isEmpty == true ? null : ledgerPurpose?.trim(),
+      clearLedgerPurpose: ledgerPurpose?.trim().isEmpty == true,
       notes: notes?.trim().isEmpty == true ? null : notes?.trim(),
       clearNotes: notes?.trim().isEmpty == true,
       updatedAt: DateTime.now(),
